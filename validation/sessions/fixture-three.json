@@ -1,0 +1,27 @@
+{
+  "sessionId": "fixture-three",
+  "definitions": "Chhati is chest girth, Kamar is waist girth, Baazu is shoulder-to-wrist, and Lambai is nape-to-hem.",
+  "rows": [
+    {
+      "subject": "row-1",
+      "heightCm": 170,
+      "clothingFit": "close",
+      "tapeCm": { "chhati": 94, "kamar": 80, "baazu": 60, "lambai": 100 },
+      "estimateCm": { "chhati": 96, "kamar": 81, "baazu": 60.5, "lambai": 101 }
+    },
+    {
+      "subject": "row-2",
+      "heightCm": 168,
+      "clothingFit": "close",
+      "tapeCm": { "chhati": 96, "kamar": 80, "baazu": 61, "lambai": 100 },
+      "estimateCm": { "chhati": 100, "kamar": 81, "baazu": 62.5, "lambai": 102 }
+    },
+    {
+      "subject": "row-3",
+      "heightCm": 174,
+      "clothingFit": "loose",
+      "tapeCm": { "chhati": 84, "kamar": 70, "baazu": 62, "lambai": 100 },
+      "estimateCm": { "chhati": 90, "kamar": 74, "baazu": 64.5, "lambai": 109 }
+    }
+  ]
+}

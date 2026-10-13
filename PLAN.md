@@ -1,6 +1,6 @@
 # Tailor Scan — product and engineering plan
 
-Status: Milestone 11 hardens privacy for integrators. The tape study is not checked in.
+Status: Milestone 12 adds a validation report for paired tape sessions. No study is checked in, so ranges stay an error budget and the review heading stays “Estimated measurements.”
 
 This document locks the MVP baseline. Later milestones should change a decision only when a tape-measure check or an integration review gives a reason, and the change should be recorded here.
 
