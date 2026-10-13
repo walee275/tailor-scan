@@ -1,4 +1,5 @@
 node_modules/
+apps/demo/public/vision/wasm/
 dist/
 .vite/
 *.tsbuildinfo

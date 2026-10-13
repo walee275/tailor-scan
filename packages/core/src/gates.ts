@@ -8,6 +8,14 @@ export const PoseIndex = {
   rightShoulder: 12,
   leftHip: 23,
   rightHip: 24,
+  leftElbow: 13,
+  rightElbow: 14,
+  leftWrist: 15,
+  rightWrist: 16,
+  leftKnee: 25,
+  rightKnee: 26,
+  leftAnkle: 27,
+  rightAnkle: 28,
   leftHeel: 29,
   rightHeel: 30,
 } as const;
@@ -18,7 +26,15 @@ export type ImageLandmark = {
   visibility: number;
 };
 
-export type GateId = "exposure" | "blur" | "framing" | "distance" | "stillness";
+export type GateId =
+  | "exposure"
+  | "blur"
+  | "framing"
+  | "distance"
+  | "stillness"
+  | "visibility"
+  | "arms"
+  | "turn";
 
 export type GateStatus = "pass" | "fail" | "pending";
 

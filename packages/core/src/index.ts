@@ -68,6 +68,17 @@ export {
 export { sampleScanResult } from "./sample";
 
 export {
+  averageVisionSamples,
+  checkFrontArms,
+  checkSideTurn,
+  checkVisibility,
+  poseGateThresholds,
+  shoulderWidthPx,
+} from "./pose";
+
+export { type PersonMask, type VisionSample, type WorldLandmark } from "./vision";
+
+export {
   POSE_LANDMARK_COUNT,
   PoseIndex,
   blurFloor,
