@@ -26,6 +26,7 @@ import {
 import { GateChips } from "./chips";
 import { CalibrationPanel } from "./calibration-panel";
 import { createManualResult } from "./manual-result";
+import { createCameraResult } from "./camera-result";
 import { createGuide, runRecordedGuide, stepGuide, type GuideSnapshot } from "./pose-guide";
 import { drawSkeleton } from "./skeleton";
 import { getDefaultVisionProvider, type VisionProvider } from "./vision-host";
@@ -285,6 +286,7 @@ export function Capture(props: {
   const [gates, setGates] = useState<GateOutcome[]>(() => emptyGates());
   const [guide, setGuide] = useState<GuideSnapshot | null>(null);
   const [imageScale, setImageScale] = useState<number | null>(null);
+  const [cameraResult, setCameraResult] = useState<ScanResult | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const replayTimer = useRef<number | null>(null);
   const stepRef = useRef(state.step);
@@ -472,7 +474,43 @@ export function Capture(props: {
 
   const stepNumber = Math.max(1, stepOrder.indexOf(state.step as (typeof stepOrder)[number]) + 1);
   const typed = parseManualNumbers(state);
-  const preview = buildPreview(state, props, typed);
+  const manualPreview = buildPreview(state, props, typed);
+  const preview =
+    state.reading === "camera" && (state.step === "review" || state.step === "done")
+      ? {
+          result: cameraResult,
+          error: cameraResult ? null : "The camera estimates are not ready.",
+        }
+      : manualPreview;
+
+  function reviewCamera(): void {
+    if (!guide?.front || state.heightCm == null || state.clothingFit === "") {
+      return;
+    }
+    const result = createCameraResult({
+      sessionId: props.sessionId,
+      displayUnits: state.displayUnits,
+      garment: state.garment,
+      heightCm: state.heightCm,
+      clothingFit: state.clothingFit,
+      front: guide.front,
+      side: guide.side,
+      sleevePath: props.sleevePath,
+      hemAnchor: props.hemAnchor,
+      easePresets: props.easePresets,
+      exportKeypoints: props.exportKeypoints,
+      sizeChart: props.sizeChart,
+    });
+    if (!result) {
+      dispatch({
+        type: "fail",
+        message: "The pose did not produce a chest and waist. You can type the measurements.",
+      });
+      return;
+    }
+    setCameraResult(result);
+    dispatch({ type: "review-camera" });
+  }
 
   function replayRecordedPose(): void {
     if (replayTimer.current != null) {
@@ -615,6 +653,11 @@ export function Capture(props: {
           {state.step === "camera" ? (
             <button type="button" class="secondary" onClick={replayRecordedPose}>
               Replay recorded pose
+            </button>
+          ) : null}
+          {state.step === "camera" && guide?.phase === "done" ? (
+            <button type="button" onClick={reviewCamera}>
+              Review camera estimates
             </button>
           ) : null}
           {state.step !== "done" ? (
@@ -959,15 +1002,22 @@ function Review(props: { state: CaptureState; preview: ScanResult | null }) {
   return (
     <>
       <p class="status">
-        These are body numbers you typed. Regular ease is added for the garment the shop cuts.
-        Height {props.preview.subject.heightCm} cm.
+        {props.preview.measurements[0]?.source === "user"
+          ? `These are body numbers you typed. Regular ease is added for the garment the shop cuts. Height ${props.preview.subject.heightCm} cm.`
+          : `Estimated measurements. Ranges are an error budget, not a tape study. Height ${props.preview.subject.heightCm} cm.`}
       </p>
       <ul>
         {props.preview.measurements.map((measurement) => (
           <li key={measurement.id}>
             <span class="name">{measurement.label}</span>
-            <span class="detail">typed by you · {measurement.valueCm.toFixed(1)} cm</span>
-            <span class="value">source user</span>
+            <span class="detail">
+              {measurement.source === "user" ? "typed by you" : measurement.method} ·{" "}
+              {measurement.valueCm.toFixed(1)} cm
+              {measurement.rangeCm
+                ? ` (${measurement.rangeCm[0].toFixed(1)}–${measurement.rangeCm[1].toFixed(1)})`
+                : ""}
+            </span>
+            <span class="value">source {measurement.source}</span>
           </li>
         ))}
       </ul>
