@@ -59,8 +59,40 @@ describe("tailor-scan element", () => {
     const decline = [...(element.shadowRoot?.querySelectorAll("button") ?? [])].find((button) =>
       button.textContent?.includes("No thanks"),
     );
-    decline?.click();
+    act(() => {
+      decline?.click();
+    });
     expect(events).toEqual(["cancel"]);
+    const text = element.shadowRoot?.textContent ?? "";
+    expect(text).toContain("Cancelled. The shop receives nothing.");
+    expect(text).not.toContain("Continue");
+    expect(element.shadowRoot?.querySelector('input[name="consent"]')).toBeNull();
+  });
+
+  it("shows the display units the customer selects", () => {
+    const element = document.createElement("tailor-scan");
+    element.setAttribute("display-units", "cm");
+    document.body.append(element);
+    const root = element.shadowRoot as ShadowRoot;
+    const consent = root.querySelector<HTMLInputElement>('input[name="consent"]');
+    act(() => {
+      consent?.click();
+    });
+    const continueButton = [...root.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Continue"),
+    );
+    act(() => {
+      continueButton?.click();
+    });
+    const units = root.querySelector<HTMLSelectElement>('select[name="units"]');
+    act(() => {
+      if (units) {
+        units.value = "in";
+        units.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+    expect(root.textContent).toContain("display in");
+    expect(units?.value).toBe("in");
   });
 
   it("explains a missing camera and still offers manual entry", () => {

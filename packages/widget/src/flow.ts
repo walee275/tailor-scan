@@ -1,7 +1,15 @@
 import type { ClothingFit, DisplayUnits, GarmentId } from "@tailor-scan/core";
 import { feetAndInchesToCm } from "@tailor-scan/core";
 
-export type CaptureStep = "consent" | "order" | "body" | "camera" | "manual" | "review" | "done";
+export type CaptureStep =
+  | "consent"
+  | "order"
+  | "body"
+  | "camera"
+  | "manual"
+  | "review"
+  | "done"
+  | "cancelled";
 
 export type CameraPhase = "idle" | "requesting" | "live" | "denied" | "missing";
 
@@ -30,6 +38,7 @@ export type CaptureState = {
 export type CaptureAction =
   | { type: "check-consent"; checked: boolean }
   | { type: "accept-consent" }
+  | { type: "decline" }
   | { type: "set-garment"; garment: GarmentId }
   | { type: "set-units"; units: DisplayUnits }
   | { type: "set-adult"; adult: boolean }
@@ -87,12 +96,23 @@ export function createCaptureState(input: {
 export function captureReducer(state: CaptureState, action: CaptureAction): CaptureState {
   switch (action.type) {
     case "check-consent":
+      if (state.step !== "consent") {
+        return state;
+      }
       return { ...state, consentChecked: action.checked, error: null };
     case "accept-consent":
-      if (!state.consentChecked || state.step !== "consent") {
+      if (state.step !== "consent") {
+        return state;
+      }
+      if (!state.consentChecked) {
         return { ...state, error: "Tick the box after you have read the note." };
       }
       return { ...state, step: "order", error: null };
+    case "decline":
+      if (state.step !== "consent") {
+        return state;
+      }
+      return { ...state, step: "cancelled", error: null };
     case "set-garment":
       return { ...state, garment: action.garment };
     case "set-units":

@@ -11,6 +11,14 @@ describe("capture flow", () => {
     expect(captureReducer(checked, { type: "accept-consent" }).step).toBe("order");
   });
 
+  it("ends the session when consent is declined", () => {
+    const start = createCaptureState({ garment: "kurta", displayUnits: "cm" });
+    const declined = captureReducer(start, { type: "decline" });
+    expect(declined.step).toBe("cancelled");
+    expect(captureReducer(declined, { type: "accept-consent" }).step).toBe("cancelled");
+    expect(captureReducer(declined, { type: "check-consent", checked: true }).step).toBe("cancelled");
+  });
+
   it("requires an adult declaration and a usable height", () => {
     let state = createCaptureState({ garment: "shirt", displayUnits: "in" });
     state = captureReducer(state, { type: "check-consent", checked: true });

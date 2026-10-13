@@ -17,6 +17,9 @@ TailorScan.open({
   onComplete(result) {
     show(inline, result);
   },
+  onCancel() {
+    show(inline, "Cancelled. The shop receives nothing.");
+  },
 });
 
 const iframe = document.querySelector<HTMLIFrameElement>("#scan-frame");
@@ -38,6 +41,9 @@ if (iframe) {
     onComplete(result) {
       show(framed, result);
     },
+    onCancel() {
+      show(framed, "Cancelled. The shop receives nothing.");
+    },
   });
 }
 
@@ -45,5 +51,5 @@ function show(node: HTMLElement | null, value: unknown): void {
   if (!node) {
     return;
   }
-  node.textContent = JSON.stringify(value, null, 2);
+  node.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
