@@ -24,8 +24,11 @@ export function drawSkeleton(
   height: number,
   chestFraction: number | null = null,
   waistFraction: number | null = null,
+  preserve = false,
 ): void {
-  context.clearRect(0, 0, width, height);
+  if (!preserve) {
+    context.clearRect(0, 0, width, height);
+  }
   context.strokeStyle = "#f4efe4";
   context.fillStyle = "#f4efe4";
   context.lineWidth = 2;
