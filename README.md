@@ -4,7 +4,7 @@ Tailor Scan is an embeddable web widget that turns a guided camera capture into 
 
 It is for e-commerce apparel brands, boutique tailors taking remote orders, and domestic tailors receiving international orders. The widget runs in the browser. There is no app to install.
 
-The demo hosts two embed shells: `TailorScan.open` on the page, and an iframe that checks message origin and session id. Each shell walks consent, order setup, and body setup, then accepts typed measurements when the camera is skipped. The result uses `source: "user"`. `packages/core` holds the result contract. The camera step can replay a recorded pose or run the local Pose Landmarker. After the arms are clear of the torso, chest and waist station lines are drawn on the kept pose. Calibration and the measurement engine are specified in [PLAN.md](PLAN.md) and are not built yet.
+The demo hosts two embed shells: `TailorScan.open` on the page, and an iframe that checks message origin and session id. Each shell walks consent, order setup, and body setup, then accepts typed measurements when the camera is skipped. The result uses `source: "user"`. `packages/core` holds the result contract. The camera step can replay a recorded pose or, when the page provides it, run the local Pose Landmarker. The model and WASM are served from this origin. After the arms are clear of the torso, chest and waist station lines are drawn on the kept pose. Calibration and the measurement engine are specified in [PLAN.md](PLAN.md) and are not built yet.
 
 ## Layout
 
