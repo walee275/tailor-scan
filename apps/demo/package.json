@@ -1,0 +1,19 @@
+{
+  "name": "@tailor-scan/demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tailor-scan/widget": "0.0.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.2",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  }
+}
