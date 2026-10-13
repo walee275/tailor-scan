@@ -1,0 +1,24 @@
+{
+  "name": "tailor-scan",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @tailor-scan/demo",
+    "build": "npm run build -w @tailor-scan/widget && npm run build -w @tailor-scan/demo",
+    "test": "npm run test -w @tailor-scan/widget",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck -w @tailor-scan/widget && npm run typecheck -w @tailor-scan/demo"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "typescript-eslint": "^8.59.0"
+  }
+}
