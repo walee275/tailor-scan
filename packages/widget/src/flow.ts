@@ -69,6 +69,21 @@ const previousStep: Partial<Record<CaptureStep, CaptureStep>> = {
   review: "manual",
 };
 
+/** Camera estimates skip manual entry, so that screen is not numbered on the camera path. */
+export function captureStepProgress(state: {
+  step: CaptureStep;
+  reading: CaptureState["reading"];
+}): { current: number; total: number } | null {
+  if (state.step === "done" || state.step === "cancelled") {
+    return null;
+  }
+  const manual = state.step === "manual" || state.reading === "manual";
+  const steps: CaptureStep[] = manual
+    ? ["consent", "order", "body", "camera", "manual", "review"]
+    : ["consent", "order", "body", "camera", "review"];
+  return { current: steps.indexOf(state.step) + 1, total: steps.length };
+}
+
 export function createCaptureState(input: {
   garment: GarmentId;
   displayUnits: DisplayUnits;

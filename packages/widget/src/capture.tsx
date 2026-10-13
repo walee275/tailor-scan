@@ -17,6 +17,7 @@ import {
 import type { EmbedConfig, ScanError } from "./config";
 import {
   captureReducer,
+  captureStepProgress,
   createCaptureState,
   parseHeightCm,
   parseManualNumbers,
@@ -42,8 +43,6 @@ const prompts = [
   "Move your arms a little away from your sides.",
   "Turn further until your chest points to the side.",
 ];
-
-const stepOrder = ["consent", "order", "body", "camera", "manual", "review"] as const;
 
 const fieldCopy: Record<ManualField, { label: string; detail: string }> = {
   chhati: { label: "Chhati", detail: "Chest" },
@@ -520,7 +519,7 @@ export function Capture(props: {
     }
   }, [guide, imageScale, state.heightCm]);
 
-  const stepNumber = Math.max(1, stepOrder.indexOf(state.step as (typeof stepOrder)[number]) + 1);
+  const stepProgress = captureStepProgress(state);
   const typed = parseManualNumbers(state);
   const manualPreview = buildPreview(state, props, typed);
   const preview =
@@ -649,11 +648,11 @@ export function Capture(props: {
         <p class="kicker">Tailor measurements</p>
         <h2 id="tailor-scan-title">Tailor Scan</h2>
         <p class="step">
-          {state.step === "done"
-            ? "Sent"
-            : state.step === "cancelled"
+          {stepProgress == null
+            ? state.step === "cancelled"
               ? "Cancelled"
-              : `Step ${stepNumber} of ${stepOrder.length}`}
+              : "Sent"
+            : `Step ${stepProgress.current} of ${stepProgress.total}`}
         </p>
         <p class="meta">
           {state.garment} · display {props.displayUnits}

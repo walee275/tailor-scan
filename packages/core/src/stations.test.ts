@@ -33,6 +33,21 @@ describe("stations", () => {
     expect(selected.waist?.fraction).toBeLessThanOrEqual(0.78);
     expect(selected.chest?.widthPx).toBeGreaterThan(selected.waist?.widthPx ?? 0);
   });
+
+  it("ignores an arm that is separate from the torso", () => {
+    const selected = selectStations({
+      mask: paint(120, 160, (x, y) => {
+        const torso = x >= 50 && x <= 70 && y >= 24 && y <= 140;
+        const arm = x >= 8 && x <= 16 && y >= 40 && y <= 70;
+        return torso || arm;
+      }),
+      landmarks: body(),
+      scaleCmPerPx: 0.5,
+      frontOnly: true,
+    });
+    expect(selected.blocked).toBe(false);
+    expect(selected.chest?.widthPx).toBeLessThanOrEqual(21);
+  });
 });
 
 function body(): ImageLandmark[] {
