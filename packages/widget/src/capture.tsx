@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import {
+  calibrateHeight,
   laplacianVariance,
   liveGates,
   meanLuma,
@@ -23,6 +24,7 @@ import {
   type ManualField,
 } from "./flow";
 import { GateChips } from "./chips";
+import { CalibrationPanel } from "./calibration-panel";
 import { createManualResult } from "./manual-result";
 import { createGuide, runRecordedGuide, stepGuide, type GuideSnapshot } from "./pose-guide";
 import { drawSkeleton } from "./skeleton";
@@ -183,6 +185,24 @@ button:disabled { cursor: default; opacity: 0.55; }
   height: 100%;
   pointer-events: none;
 }
+.calibration { margin-top: 0.85rem; }
+.pad {
+  position: relative;
+  margin-top: 0.75rem;
+  height: 9rem;
+  background: #1c2421;
+  touch-action: none;
+}
+.handle {
+  position: absolute;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #e7c27a;
+  color: #1c2421;
+}
 .chips {
   display: grid;
   gap: 0.45rem;
@@ -264,6 +284,7 @@ export function Capture(props: {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [gates, setGates] = useState<GateOutcome[]>(() => emptyGates());
   const [guide, setGuide] = useState<GuideSnapshot | null>(null);
+  const [imageScale, setImageScale] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const replayTimer = useRef<number | null>(null);
   const stepRef = useRef(state.step);
@@ -409,13 +430,26 @@ export function Capture(props: {
     canvas.width = 320;
     canvas.height = 240;
     const front = guide?.front;
+    const heightCal =
+      front?.mask == null || state.heightCm == null
+        ? null
+        : calibrateHeight({
+            mask: front.mask,
+            landmarks: front.landmarks,
+            imageHeight: front.imageHeight,
+            enteredHeightCm: state.heightCm,
+          });
+    const imageCmPerPx = imageScale ?? heightCal?.scaleCmPerPx ?? null;
     const stations =
       front?.mask == null
         ? null
         : selectStations({
             mask: front.mask,
             landmarks: front.landmarks,
-            scaleCmPerPx: previewScaleCmPerPx(front.mask, front.landmarks),
+            scaleCmPerPx:
+              imageCmPerPx == null
+                ? previewScaleCmPerPx(front.mask, front.landmarks, state.heightCm ?? 170)
+                : imageCmPerPx * (front.imageWidth / front.mask.width),
             frontOnly: guide?.side == null,
           });
     drawSkeleton(
@@ -426,7 +460,15 @@ export function Capture(props: {
       stations?.chest?.fraction ?? null,
       stations?.waist?.fraction ?? null,
     );
-  }, [guide]);
+    if (heightCal?.crown) {
+      const y = (heightCal.crown.y / sample.imageHeight) * canvas.height;
+      context.strokeStyle = "#f4efe4";
+      context.beginPath();
+      context.moveTo(canvas.width * 0.42, y);
+      context.lineTo(canvas.width * 0.58, y);
+      context.stroke();
+    }
+  }, [guide, imageScale, state.heightCm]);
 
   const stepNumber = Math.max(1, stepOrder.indexOf(state.step as (typeof stepOrder)[number]) + 1);
   const typed = parseManualNumbers(state);
@@ -531,7 +573,14 @@ export function Capture(props: {
         ) : null}
         {state.step === "body" ? <Body state={state} dispatch={dispatch} /> : null}
         {state.step === "camera" ? (
-          <Camera state={state} videoRef={videoRef} canvasRef={canvasRef} gates={gates} guide={guide} />
+          <Camera
+            state={state}
+            videoRef={videoRef}
+            canvasRef={canvasRef}
+            gates={gates}
+            guide={guide}
+            onImageScale={setImageScale}
+          />
         ) : null}
         {state.step === "manual" ? <Manual state={state} dispatch={dispatch} /> : null}
         {state.step === "review" || state.step === "done" ? (
@@ -807,7 +856,18 @@ function Camera(props: {
   canvasRef: { current: HTMLCanvasElement | null };
   gates: GateOutcome[];
   guide: GuideSnapshot | null;
+  onImageScale: (scaleCmPerPx: number | null) => void;
 }) {
+  const front = props.guide?.front ?? null;
+  const height =
+    front?.mask == null || props.state.heightCm == null
+      ? null
+      : calibrateHeight({
+          mask: front.mask,
+          landmarks: front.landmarks,
+          imageHeight: front.imageHeight,
+          enteredHeightCm: props.state.heightCm,
+        });
   return (
     <>
       <p class="status">
@@ -847,6 +907,11 @@ function Camera(props: {
         The preview stays on this device. Replay uses a recorded pose. A live camera loads the local
         pose model when this page provides one.
       </p>
+      <CalibrationPanel
+        heightScaleCmPerPx={height?.scaleCmPerPx ?? null}
+        sample={front}
+        onImageScale={props.onImageScale}
+      />
     </>
   );
 }
