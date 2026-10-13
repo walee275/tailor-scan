@@ -22,6 +22,9 @@ import {
 } from "./flow";
 import { GateChips } from "./chips";
 import { createManualResult } from "./manual-result";
+import { createGuide, runRecordedGuide, stepGuide, type GuideSnapshot } from "./pose-guide";
+import { drawSkeleton } from "./skeleton";
+import { getDefaultVisionProvider, type VisionProvider } from "./vision-host";
 
 const prompts = [
   "Prop the phone at about navel height, lens level, about 2 to 3 meters away.",
@@ -160,12 +163,23 @@ button:disabled { cursor: default; opacity: 0.55; }
   color: #8a3d32;
   font-size: 0.9rem;
 }
-video {
+.stage {
+  position: relative;
+  margin-top: 0.75rem;
+  background: #1c2421;
+  min-height: 8rem;
+}
+.stage video,
+.stage canvas {
   display: block;
   width: 100%;
   max-height: 16rem;
-  margin-top: 0.75rem;
-  background: #1c2421;
+}
+.stage canvas {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  pointer-events: none;
 }
 .chips {
   display: grid;
@@ -232,6 +246,7 @@ export function Capture(props: {
   easePresets?: EmbedConfig["easePresets"];
   exportKeypoints?: boolean;
   sizeChart?: EmbedConfig["sizeChart"];
+  createVisionProvider?: () => Promise<VisionProvider>;
   onProgress: (step: string) => void;
   onComplete: (result: ScanResult) => void;
   onCancel: () => void;
@@ -246,6 +261,9 @@ export function Capture(props: {
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [gates, setGates] = useState<GateOutcome[]>(() => emptyGates());
+  const [guide, setGuide] = useState<GuideSnapshot | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const replayTimer = useRef<number | null>(null);
   const stepRef = useRef(state.step);
   stepRef.current = state.step;
 
@@ -285,14 +303,37 @@ export function Capture(props: {
       return;
     }
     let stopped = false;
+    let busy = false;
     let last = 0;
+    let provider: VisionProvider | null = null;
+    let guideState = createGuide();
+    const factory = props.createVisionProvider ?? getDefaultVisionProvider();
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (factory) {
+      void factory()
+        .then((opened) => {
+          if (stopped) {
+            opened.close();
+            return;
+          }
+          provider = opened;
+        })
+        .catch((error: unknown) => {
+          if (stopped) {
+            return;
+          }
+          props.onError({
+            code: "model-load-failed",
+            message: error instanceof Error ? error.message : "The pose model did not load.",
+          });
+        });
+    }
     const tick = (now: number) => {
       if (stopped) {
         return;
       }
-      if (context && now - last > 250) {
+      if (context && !busy && now - last > 250) {
         last = now;
         const video = videoRef.current;
         if (video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -300,15 +341,37 @@ export function Capture(props: {
           canvas.height = video.videoHeight;
           context.drawImage(video, 0, 0);
           const frame = context.getImageData(0, 0, canvas.width, canvas.height);
-          setGates(
-            liveGates({
-              luma: meanLuma(frame.data),
-              laplacian: laplacianVariance(frame.data, canvas.width, canvas.height),
-              imageHeight: canvas.height,
-              landmarks: null,
-              recent: [],
-            }),
-          );
+          const luma = meanLuma(frame.data);
+          const sharpness = laplacianVariance(frame.data, canvas.width, canvas.height);
+          busy = true;
+          void Promise.resolve(provider ? provider.sample(video, now) : null)
+            .then((sampled) => {
+              if (stopped) {
+                return;
+              }
+              if (!sampled) {
+                setGates(
+                  liveGates({
+                    luma,
+                    laplacian: sharpness,
+                    imageHeight: canvas.height,
+                    landmarks: null,
+                    recent: [],
+                  }),
+                );
+                return;
+              }
+              guideState = stepGuide(
+                guideState,
+                { ...sampled, luma, sharpness, imageWidth: canvas.width, imageHeight: canvas.height },
+                now,
+              );
+              setGuide(guideState);
+              setGates(guideState.gates);
+            })
+            .finally(() => {
+              busy = false;
+            });
         }
       }
       requestAnimationFrame(tick);
@@ -317,19 +380,68 @@ export function Capture(props: {
     return () => {
       stopped = true;
       cancelAnimationFrame(frameId);
+      provider?.close();
     };
-  }, [state.step, state.camera]);
+  }, [state.step, state.camera, props.createVisionProvider, props.onError]);
 
   useEffect(() => {
     return () => {
       stopTracks(streamRef.current);
       streamRef.current = null;
+      if (replayTimer.current != null) {
+        window.clearInterval(replayTimer.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const sample = guide?.side ?? guide?.front ?? guide?.burst.at(-1);
+    if (!canvas || !sample) {
+      return;
+    }
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+    canvas.width = 320;
+    canvas.height = 240;
+    drawSkeleton(context, sample.landmarks, canvas.width, canvas.height);
+  }, [guide]);
 
   const stepNumber = Math.max(1, stepOrder.indexOf(state.step as (typeof stepOrder)[number]) + 1);
   const typed = parseManualNumbers(state);
   const preview = buildPreview(state, props, typed);
+
+  function replayRecordedPose(): void {
+    if (replayTimer.current != null) {
+      window.clearInterval(replayTimer.current);
+    }
+    const frames = runRecordedGuide();
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const last = frames[frames.length - 1];
+    if (!last) {
+      return;
+    }
+    if (reduced) {
+      setGuide(last);
+      setGates(last.gates);
+      return;
+    }
+    let index = 0;
+    replayTimer.current = window.setInterval(() => {
+      const frame = frames[index];
+      if (!frame) {
+        if (replayTimer.current != null) {
+          window.clearInterval(replayTimer.current);
+        }
+        return;
+      }
+      setGuide(frame);
+      setGates(frame.gates);
+      index += 1;
+    }, 80);
+  }
 
   async function enableCamera(): Promise<void> {
     dispatch({ type: "camera-request" });
@@ -399,7 +511,9 @@ export function Capture(props: {
           <Order state={state} dispatch={dispatch} hasChart={Boolean(props.sizeChart?.length)} />
         ) : null}
         {state.step === "body" ? <Body state={state} dispatch={dispatch} /> : null}
-        {state.step === "camera" ? <Camera state={state} videoRef={videoRef} gates={gates} /> : null}
+        {state.step === "camera" ? (
+          <Camera state={state} videoRef={videoRef} canvasRef={canvasRef} gates={gates} guide={guide} />
+        ) : null}
         {state.step === "manual" ? <Manual state={state} dispatch={dispatch} /> : null}
         {state.step === "review" || state.step === "done" ? (
           <Review state={state} preview={preview.result} />
@@ -428,6 +542,11 @@ export function Capture(props: {
               onClick={() => void enableCamera()}
             >
               {state.camera === "requesting" ? "Asking for the camera…" : "Turn on camera"}
+            </button>
+          ) : null}
+          {state.step === "camera" ? (
+            <button type="button" class="secondary" onClick={replayRecordedPose}>
+              Replay recorded pose
             </button>
           ) : null}
           {state.step !== "done" ? (
@@ -666,14 +785,22 @@ function Body(props: {
 function Camera(props: {
   state: CaptureState;
   videoRef: { current: HTMLVideoElement | null };
+  canvasRef: { current: HTMLCanvasElement | null };
   gates: GateOutcome[];
+  guide: GuideSnapshot | null;
 }) {
   return (
     <>
       <p class="status">
-        A second person holding the phone is the easier path. You can type the measurements if the
-        camera is unavailable.
+        {props.guide?.prompt ??
+          "A second person holding the phone is the easier path. You can type the measurements if the camera is unavailable."}
       </p>
+      <div class="stage">
+        {props.state.camera === "live" ? (
+          <video ref={props.videoRef} autoPlay muted playsInline aria-label="Camera preview" />
+        ) : null}
+        <canvas ref={props.canvasRef} aria-hidden="true" />
+      </div>
       <GateChips gates={props.gates} />
       <p class="guide-row">
         <span class="guide" aria-hidden="true" />
@@ -686,9 +813,6 @@ function Camera(props: {
           </li>
         ))}
       </ul>
-      {props.state.camera === "live" ? (
-        <video ref={props.videoRef} autoPlay muted playsInline aria-label="Camera preview" />
-      ) : null}
       {props.state.camera === "denied" ? (
         <p class="error" role="alert">
           Camera access was blocked. In the browser site settings, allow the camera for this page,
@@ -700,9 +824,10 @@ function Camera(props: {
           This browser has no camera. Type the measurements instead.
         </p>
       ) : null}
-      {props.state.camera === "live" ? (
-        <p class="hint">The preview stays on this device. Pose capture is not connected yet.</p>
-      ) : null}
+      <p class="hint">
+        The preview stays on this device. Replay uses a recorded pose. A live camera loads the local
+        pose model when this page provides one.
+      </p>
     </>
   );
 }

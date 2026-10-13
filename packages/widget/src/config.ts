@@ -7,6 +7,7 @@ import type {
   SizeChartEntry,
   SleevePath,
 } from "@tailor-scan/core";
+import type { VisionProviderFactory } from "./vision-host";
 
 export type CalibrationPreference = "height" | "reference" | "both";
 export type SleeveAggregate = "mean" | "max";
@@ -26,6 +27,7 @@ export type EmbedConfig = {
   theme?: { accent?: string };
   sizeChart?: SizeChartEntry[];
   easePresets?: EasePresets | null;
+  createVisionProvider?: VisionProviderFactory;
 };
 
 export type ProgressState = {
