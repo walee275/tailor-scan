@@ -79,6 +79,29 @@ export {
 export { type PersonMask, type VisionSample, type WorldLandmark } from "./vision";
 
 export {
+  A4_INNER_MM,
+  CREDIT_CARD_MM,
+  agreeScales,
+  buildA4SheetPdf,
+  calibrateHeight,
+  detectRectangle,
+  heightScaleCmPerPx,
+  moveCorner,
+  quadSizePx,
+  referenceMillimeters,
+  referenceScaleCmPerPx,
+  selectCrown,
+  selectFloor,
+  type Corner,
+  type CornerQuad,
+  type HeightCalibration,
+  type Millimeters,
+  type RectangleDetection,
+  type ReferencePresetId,
+  type ScaleChoice,
+} from "./calibration";
+
+export {
   previewScaleCmPerPx,
   selectStations,
   shoulderHipAxis,
