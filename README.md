@@ -4,7 +4,7 @@ Tailor Scan is an embeddable web widget that turns a guided camera capture into 
 
 It is for e-commerce apparel brands, boutique tailors taking remote orders, and domestic tailors receiving international orders. The widget runs in the browser. There is no app to install.
 
-The demo hosts two embed shells: `TailorScan.open` on the page, and an iframe that checks message origin and session id. Each shell walks consent, order setup, and body setup, then accepts typed measurements when the camera is skipped. The result uses `source: "user"`. `packages/core` holds the result contract. The camera step can replay a recorded pose or run the local Pose Landmarker. After the arms are clear of the torso, chest and waist station lines are drawn on the kept pose. A printable A4 sheet and a corner marker cross-check the height scale. After a front and side pose, the widget can send estimated Chhati, Kamar, Baazu, and Lambai in centimeters. The review step shows body, ease, and garment columns, and a drape preview that follows the garment ease. Typing the four numbers is still available. The widget does not upload pictures. The tape study is specified in [PLAN.md](PLAN.md) and is not checked in.
+The demo hosts two embed shells: `TailorScan.open` on the page, and an iframe that checks message origin and session id. Each shell walks consent, order setup, and body setup, then accepts typed measurements when the camera is skipped. The result uses `source: "user"`. `packages/core` holds the result contract. The camera step can replay a recorded pose or run the local Pose Landmarker. After the arms are clear of the torso, chest and waist station lines are drawn on the kept pose. A printable A4 sheet and a corner marker cross-check the height scale. After a front and side pose, the widget can send estimated Chhati, Kamar, Baazu, and Lambai in centimeters. The review step shows body, ease, and garment columns, and a drape preview that follows the garment ease. Typing the four numbers is still available. The widget does not upload pictures. `npm run validate` scores a three-row fixture and does not claim the accuracy targets. No tape study is checked in, so ranges stay an error budget.
 
 ## Layout
 
@@ -28,7 +28,10 @@ npm test
 npm run lint
 npm run typecheck
 npm run build
+npm run validate
 ```
+
+`npm run validate` prints mean absolute error and the 80th percentile for the three-row fixture in `validation/sessions`. That fixture is hand-computed. It is not a tape study, and the report does not claim the accuracy targets.
 
 `npm run build` writes the widget library to `packages/widget/dist` (`tailor-scan.js` and `tailor-scan.iife.js`) and the demo to `apps/demo/dist`.
 
