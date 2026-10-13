@@ -15,7 +15,7 @@ const css = `
   box-sizing: border-box;
   border: 1px solid #d5cec2;
   background: #fbf8f2;
-  padding: 1.25rem 1.25rem 0.4rem;
+  padding: 1.25rem 1.25rem 1rem;
 }
 .kicker {
   margin: 0;
@@ -31,17 +31,24 @@ h2 {
   font-weight: 560;
   letter-spacing: -0.02em;
 }
-.status {
-  margin: 0.65rem 0 1rem;
-  max-width: 36rem;
+.status, .meta {
   font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.status {
+  margin: 0.65rem 0 0.35rem;
+  max-width: 36rem;
   font-size: 0.95rem;
   line-height: 1.45;
   color: #3d4742;
 }
+.meta {
+  margin: 0 0 1rem;
+  color: #5e6a63;
+  font-size: 0.85rem;
+}
 ul {
   list-style: none;
-  margin: 0;
+  margin: 0 0 1rem;
   padding: 0;
 }
 li {
@@ -66,9 +73,29 @@ li {
   color: #8a8174;
   font-size: 0.85rem;
 }
+button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--tailor-accent, #1f3a34);
+  color: #fbf8f2;
+  font: inherit;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.95rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
 `;
 
-export function Placeholder() {
+export function Placeholder(props: {
+  displayUnits: string;
+  garment: string;
+  sent: boolean;
+  onSample: () => void;
+}) {
   return (
     <>
       <style>{css}</style>
@@ -76,6 +103,9 @@ export function Placeholder() {
         <p class="kicker">Embed preview</p>
         <h2 id="tailor-scan-title">Tailor Scan</h2>
         <p class="status">Guided capture is not connected yet.</p>
+        <p class="meta">
+          {props.garment} · display {props.displayUnits}
+        </p>
         <ul>
           {measurements.map(([name, detail]) => (
             <li key={name}>
@@ -85,6 +115,9 @@ export function Placeholder() {
             </li>
           ))}
         </ul>
+        <button type="button" disabled={props.sent} onClick={props.onSample}>
+          {props.sent ? "Sample sent" : "Send sample result"}
+        </button>
       </section>
     </>
   );

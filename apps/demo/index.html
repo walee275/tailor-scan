@@ -10,17 +10,29 @@
       <p class="eyebrow">Integration fixture</p>
       <h1>Shop page</h1>
       <p class="lede">
-        This host page only mounts the embed. The card below is the
-        <code>&lt;tailor-scan&gt;</code> element a merchant site would include.
+        Two shells, one sample result. The inline widget is
+        <code>TailorScan.open</code>. The frame below speaks the iframe
+        protocol. Capture is still a later milestone.
       </p>
     </header>
     <main>
-      <tailor-scan></tailor-scan>
+      <section>
+        <h2>Inline element</h2>
+        <div id="inline-slot"></div>
+        <h3>Result</h3>
+        <pre id="inline-result">Waiting for the sample result.</pre>
+      </section>
+      <section>
+        <h2>Iframe</h2>
+        <iframe id="scan-frame" title="Tailor Scan"></iframe>
+        <h3>Result</h3>
+        <pre id="iframe-result">Waiting for the sample result.</pre>
+      </section>
     </main>
     <footer>
       <p>
-        Camera capture and measurement math are later milestones. This build
-        proves the widget mounts.
+        Click “Send sample result” in each shell. A message from any origin
+        other than this page is ignored.
       </p>
     </footer>
     <script type="module" src="/src/main.ts"></script>

@@ -1,6 +1,6 @@
 # Tailor Scan — product and engineering plan
 
-Status: Milestone 2 adds the result contract in `packages/core` (schema, units, ease, size overlap). Capture and measurement math are not built yet.
+Status: Milestone 3 adds the embed shells (script API, web component, iframe) with a sample result. Capture and measurement math are not built yet.
 
 This document locks the MVP baseline. Later milestones should change a decision only when a tape-measure check or an integration review gives a reason, and the change should be recorded here.
 

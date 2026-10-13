@@ -64,3 +64,5 @@ export {
   type ScanResultValidation,
   type SchemaIssue,
 } from "./schema";
+
+export { sampleScanResult } from "./sample";
