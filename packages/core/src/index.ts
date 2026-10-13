@@ -66,3 +66,22 @@ export {
 } from "./schema";
 
 export { sampleScanResult } from "./sample";
+
+export {
+  POSE_LANDMARK_COUNT,
+  PoseIndex,
+  blurFloor,
+  checkBlur,
+  checkExposure,
+  checkFraming,
+  checkStillness,
+  gateThresholds,
+  laplacianVariance,
+  liveGates,
+  meanLuma,
+  standingPose,
+  type GateId,
+  type GateOutcome,
+  type GateStatus,
+  type ImageLandmark,
+} from "./gates";

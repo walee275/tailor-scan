@@ -4,7 +4,7 @@ Tailor Scan is an embeddable web widget that turns a guided camera capture into 
 
 It is for e-commerce apparel brands, boutique tailors taking remote orders, and domestic tailors receiving international orders. The widget runs in the browser. There is no app to install.
 
-The demo hosts two embed shells: `TailorScan.open` on the page, and an iframe that checks message origin and session id. Each shell walks consent, order setup, and body setup, then accepts typed measurements when the camera is skipped. The result uses `source: "user"`. `packages/core` holds the result contract. Pose and measurement math are specified in [PLAN.md](PLAN.md) and are not built yet.
+The demo hosts two embed shells: `TailorScan.open` on the page, and an iframe that checks message origin and session id. Each shell walks consent, order setup, and body setup, then accepts typed measurements when the camera is skipped. The result uses `source: "user"`. `packages/core` holds the result contract. Frame quality gates run as pure checks, and the camera step shows a chip for light, sharpness, full body, distance, and stillness. Pose and measurement math are specified in [PLAN.md](PLAN.md) and are not built yet.
 
 ## Layout
 

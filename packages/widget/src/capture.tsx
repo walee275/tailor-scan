@@ -1,5 +1,15 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
-import type { DisplayUnits, GarmentId, HemAnchor, ScanResult, SleevePath } from "@tailor-scan/core";
+import {
+  laplacianVariance,
+  liveGates,
+  meanLuma,
+  type DisplayUnits,
+  type GarmentId,
+  type GateOutcome,
+  type HemAnchor,
+  type ScanResult,
+  type SleevePath,
+} from "@tailor-scan/core";
 import type { EmbedConfig, ScanError } from "./config";
 import {
   captureReducer,
@@ -10,6 +20,7 @@ import {
   type CaptureState,
   type ManualField,
 } from "./flow";
+import { GateChips } from "./chips";
 import { createManualResult } from "./manual-result";
 
 const prompts = [
@@ -156,6 +167,29 @@ video {
   margin-top: 0.75rem;
   background: #1c2421;
 }
+.chips {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.85rem 0 0;
+}
+.chips li {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 0.45rem 0.6rem;
+  align-items: baseline;
+  border-top: 0;
+  padding: 0.35rem 0;
+  font-size: 0.82rem;
+}
+.chip-label { font-weight: 650; }
+.chip-status {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.chips li[data-status="fail"] .chip-status { color: #8a3d32; }
+.chips li[data-status="pass"] .chip-status { color: #1f3a34; }
+.chip-prompt { color: #3d4742; }
 .guide-row {
   display: flex;
   align-items: center;
@@ -211,6 +245,7 @@ export function Capture(props: {
   const [spoken, setSpoken] = useState("");
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [gates, setGates] = useState<GateOutcome[]>(() => emptyGates());
   const stepRef = useRef(state.step);
   stepRef.current = state.step;
 
@@ -244,6 +279,46 @@ export function Capture(props: {
       video.srcObject = stream;
     }
   }, [state.camera]);
+
+  useEffect(() => {
+    if (state.step !== "camera" || state.camera !== "live") {
+      return;
+    }
+    let stopped = false;
+    let last = 0;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const tick = (now: number) => {
+      if (stopped) {
+        return;
+      }
+      if (context && now - last > 250) {
+        last = now;
+        const video = videoRef.current;
+        if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          context.drawImage(video, 0, 0);
+          const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+          setGates(
+            liveGates({
+              luma: meanLuma(frame.data),
+              laplacian: laplacianVariance(frame.data, canvas.width, canvas.height),
+              imageHeight: canvas.height,
+              landmarks: null,
+              recent: [],
+            }),
+          );
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    const frameId = requestAnimationFrame(tick);
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, [state.step, state.camera]);
 
   useEffect(() => {
     return () => {
@@ -324,7 +399,7 @@ export function Capture(props: {
           <Order state={state} dispatch={dispatch} hasChart={Boolean(props.sizeChart?.length)} />
         ) : null}
         {state.step === "body" ? <Body state={state} dispatch={dispatch} /> : null}
-        {state.step === "camera" ? <Camera state={state} videoRef={videoRef} /> : null}
+        {state.step === "camera" ? <Camera state={state} videoRef={videoRef} gates={gates} /> : null}
         {state.step === "manual" ? <Manual state={state} dispatch={dispatch} /> : null}
         {state.step === "review" || state.step === "done" ? (
           <Review state={state} preview={preview.result} />
@@ -591,6 +666,7 @@ function Body(props: {
 function Camera(props: {
   state: CaptureState;
   videoRef: { current: HTMLVideoElement | null };
+  gates: GateOutcome[];
 }) {
   return (
     <>
@@ -598,6 +674,7 @@ function Camera(props: {
         A second person holding the phone is the easier path. You can type the measurements if the
         camera is unavailable.
       </p>
+      <GateChips gates={props.gates} />
       <p class="guide-row">
         <span class="guide" aria-hidden="true" />
         Position
@@ -794,6 +871,16 @@ function buildPreview(
       error: error instanceof Error ? error.message : "These measurements could not be checked.",
     };
   }
+}
+
+function emptyGates(): GateOutcome[] {
+  return liveGates({
+    luma: null,
+    laplacian: null,
+    imageHeight: 0,
+    landmarks: null,
+    recent: [],
+  });
 }
 
 function stopTracks(stream: MediaStream | null): void {
