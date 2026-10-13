@@ -59,6 +59,23 @@ export {
 export { overlappingSizes, type SizeChartEntry, type SizedMeasurement } from "./sizes";
 
 export {
+  armIsInPlane,
+  chestDepthPrior,
+  compareWaistToChest,
+  estimateGirth,
+  estimateLambai,
+  estimateSleeve,
+  napeToShoulderCm,
+  ramanujanCircumference,
+  waistDepthPrior,
+  worldLength,
+  type ArmBones,
+  type GirthEstimate,
+  type SleeveEstimate,
+  type Vec3,
+} from "./measure";
+
+export {
   scanResultSchema,
   validateScanResult,
   type ScanResultValidation,
@@ -105,6 +122,7 @@ export {
   previewScaleCmPerPx,
   selectStations,
   shoulderHipAxis,
+  torsoWidthPx,
   type StationPick,
   type StationSelection,
 } from "./stations";

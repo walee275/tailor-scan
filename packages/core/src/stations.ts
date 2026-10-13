@@ -295,3 +295,26 @@ function rowWidth(mask: PersonMask, row: number): number {
   }
   return maxX < 0 ? 0 : maxX - minX + 1;
 }
+
+export function torsoWidthPx(input: {
+  mask: PersonMask;
+  landmarks: ImageLandmark[];
+  scaleCmPerPx: number;
+  fraction: number;
+}): number | null {
+  const axis = shoulderHipAxis(input.landmarks);
+  if (!axis) {
+    return null;
+  }
+  const span = axis.hipY - axis.shoulderY;
+  if (span <= 0) {
+    return null;
+  }
+  const cleared = removeArms(input.mask, input.landmarks, input.scaleCmPerPx);
+  const row = Math.round((axis.shoulderY + input.fraction * span) * cleared.height);
+  if (row < 0 || row >= cleared.height) {
+    return null;
+  }
+  const width = rowWidth(cleared, row);
+  return width > 0 ? width : null;
+}
