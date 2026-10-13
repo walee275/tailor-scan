@@ -1,0 +1,96 @@
+{
+  "schema": "tailor-scan.result.v1",
+  "sessionId": "8f0c",
+  "capturedAt": "2026-10-13T14:00:00.000Z",
+  "displayUnits": "cm",
+  "garment": "kurta",
+  "subject": {
+    "heightCm": 172,
+    "clothingFit": "close",
+    "adultDeclaration": true
+  },
+  "calibration": {
+    "method": "height+a4",
+    "frontScaleCmPerPx": 0.21,
+    "sideScaleCmPerPx": 0.2,
+    "agreement": "within-3pct",
+    "confidence": "high"
+  },
+  "measurements": [
+    {
+      "id": "chhati",
+      "label": "Chhati",
+      "source": "camera",
+      "method": "ellipse-two-view",
+      "valueCm": 96.4,
+      "rangeCm": [91.5, 101.5],
+      "rangeBasis": "error-budget",
+      "confidence": "medium",
+      "stationFraction": 0.31,
+      "overrideCm": null
+    },
+    {
+      "id": "kamar",
+      "label": "Kamar",
+      "source": "camera",
+      "method": "ellipse-two-view",
+      "valueCm": 84.0,
+      "rangeCm": [79.5, 89.0],
+      "rangeBasis": "error-budget",
+      "confidence": "medium",
+      "stationFraction": 0.66,
+      "overrideCm": null
+    },
+    {
+      "id": "baazu",
+      "label": "Baazu",
+      "source": "camera",
+      "method": "scaled-world-bones",
+      "sleevePath": "shoulder-to-wrist",
+      "valueCm": 63.5,
+      "rangeCm": [61.0, 66.0],
+      "rangeBasis": "error-budget",
+      "confidence": "high",
+      "leftCm": 63.0,
+      "rightCm": 64.0,
+      "overrideCm": null
+    },
+    {
+      "id": "lambai",
+      "label": "Lambai",
+      "source": "camera",
+      "method": "nape-to-hem",
+      "lengthAnchor": "nape",
+      "hemAnchor": "knee",
+      "valueCm": 102.0,
+      "rangeCm": [99.5, 104.5],
+      "rangeBasis": "error-budget",
+      "confidence": "high",
+      "overrideCm": null
+    }
+  ],
+  "fit": {
+    "preset": "regular",
+    "easeChestCm": 14,
+    "easeWaistCm": 16,
+    "sleeveLengthDeltaCm": 1,
+    "garmentLengthDeltaCm": 0,
+    "flare": "straight"
+  },
+  "garmentMeasurements": {
+    "chhatiCm": 110.4,
+    "kamarCm": 100.0,
+    "baazuCm": 64.5,
+    "lambaiCm": 102.0
+  },
+  "sizes": [],
+  "quality": {
+    "front": "pass",
+    "side": "pass",
+    "warnings": []
+  },
+  "privacy": {
+    "imagesLeftDevice": false,
+    "keypointsIncluded": false
+  }
+}

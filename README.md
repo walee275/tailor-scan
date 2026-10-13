@@ -4,13 +4,13 @@ Tailor Scan is an embeddable web widget that turns a guided camera capture into 
 
 It is for e-commerce apparel brands, boutique tailors taking remote orders, and domestic tailors receiving international orders. The widget runs in the browser. There is no app to install.
 
-This repository is at the scaffold milestone. The demo mounts a placeholder `<tailor-scan>` element. Camera capture, measurement math, and the embed contract are specified in [PLAN.md](PLAN.md) and are not built yet.
+The demo mounts a placeholder `<tailor-scan>` element. `packages/core` holds the result contract: JSON schema, centimeter and inch conversion, ease, and size overlap. Camera capture and measurement math are specified in [PLAN.md](PLAN.md) and are not built yet.
 
 ## Layout
 
 - `packages/widget` — Vite library that defines `<tailor-scan>`. Preact renders inside an open shadow root. Importing the package registers the element.
 - `apps/demo` — static host page used as the integration fixture.
-- `packages/core` — measurement math. Added in the next milestone.
+- `packages/core` — result schema, unit conversion, ease, and size-chart overlap. No camera or girth math yet.
 
 ## Run the demo
 

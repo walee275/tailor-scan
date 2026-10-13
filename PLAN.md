@@ -1,6 +1,6 @@
 # Tailor Scan — product and engineering plan
 
-Status: Milestone 1 scaffolds the workspace and a placeholder widget. The behavior below is the MVP spec; capture, math, and the embed contract are not built yet.
+Status: Milestone 2 adds the result contract in `packages/core` (schema, units, ease, size overlap). Capture and measurement math are not built yet.
 
 This document locks the MVP baseline. Later milestones should change a decision only when a tape-measure check or an integration review gives a reason, and the change should be recorded here.
 
