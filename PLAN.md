@@ -1,6 +1,6 @@
 # Tailor Scan — product and engineering plan
 
-Status: Milestone 9 adds the measurement engine. Review, drape, and the tape study are not built yet.
+Status: Milestone 10 adds review, overrides, and a drape preview. Privacy hardening and the tape study are not built yet.
 
 This document locks the MVP baseline. Later milestones should change a decision only when a tape-measure check or an integration review gives a reason, and the change should be recorded here.
 

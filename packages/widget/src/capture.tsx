@@ -27,6 +27,7 @@ import { GateChips } from "./chips";
 import { CalibrationPanel } from "./calibration-panel";
 import { createManualResult } from "./manual-result";
 import { createCameraResult } from "./camera-result";
+import { ReviewEditor } from "./review-editor";
 import { createGuide, runRecordedGuide, stepGuide, type GuideSnapshot } from "./pose-guide";
 import { drawSkeleton } from "./skeleton";
 import { getDefaultVisionProvider, type VisionProvider } from "./vision-host";
@@ -194,15 +195,38 @@ button:disabled { cursor: default; opacity: 0.55; }
   background: #1c2421;
   touch-action: none;
 }
-.handle {
-  position: absolute;
-  width: 1.15rem;
-  height: 1.15rem;
-  padding: 0;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: #e7c27a;
-  color: #1c2421;
+.loft {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin-top: 0.85rem;
+  background: #1c2421;
+}
+table.measure {
+  width: 100%;
+  margin-top: 0.85rem;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+table.measure th,
+table.measure td {
+  text-align: left;
+  padding: 0.45rem 0.35rem;
+  border-top: 1px solid #e4ddd1;
+  vertical-align: top;
+}
+.tape {
+  width: 9rem;
+  margin-top: 0.75rem;
+}
+.tape path {
+  fill: none;
+  stroke: #1f3a34;
+  stroke-width: 1.4;
+}
+.tape text {
+  fill: #5e6a63;
+  font-size: 8px;
 }
 .chips {
   display: grid;
@@ -287,6 +311,7 @@ export function Capture(props: {
   const [guide, setGuide] = useState<GuideSnapshot | null>(null);
   const [imageScale, setImageScale] = useState<number | null>(null);
   const [cameraResult, setCameraResult] = useState<ScanResult | null>(null);
+  const [draft, setDraft] = useState<ScanResult | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const replayTimer = useRef<number | null>(null);
   const stepRef = useRef(state.step);
@@ -573,7 +598,8 @@ export function Capture(props: {
   }
 
   function send(): void {
-    if (!preview.result) {
+    const result = draft ?? preview.result;
+    if (!result) {
       dispatch({
         type: "fail",
         message: preview.error ?? "These measurements could not be checked.",
@@ -582,7 +608,7 @@ export function Capture(props: {
     }
     stopTracks(streamRef.current);
     streamRef.current = null;
-    props.onComplete(preview.result);
+    props.onComplete(result);
     dispatch({ type: "confirm" });
   }
 
@@ -591,7 +617,7 @@ export function Capture(props: {
     (state.step === "order" && !state.adult) ||
     (state.step === "body" && (parseHeightCm(state) == null || state.clothingFit === "")) ||
     (state.step === "manual" && typed == null) ||
-    (state.step === "review" && preview.result == null);
+    (state.step === "review" && (draft ?? preview.result) == null);
 
   return (
     <>
@@ -621,9 +647,14 @@ export function Capture(props: {
           />
         ) : null}
         {state.step === "manual" ? <Manual state={state} dispatch={dispatch} /> : null}
-        {state.step === "review" || state.step === "done" ? (
-          <Review state={state} preview={preview.result} />
+        {state.step === "review" && (draft ?? preview.result) ? (
+          <ReviewEditor
+            result={(draft ?? preview.result)!}
+            easePresets={props.easePresets}
+            onChange={setDraft}
+          />
         ) : null}
+        {state.step === "done" ? <p class="status">Measurements sent. The camera is off.</p> : null}
         {state.error || preview.error ? (
           <p class="error" role="alert">
             {state.error ?? preview.error}
@@ -631,7 +662,14 @@ export function Capture(props: {
         ) : null}
         <div class="actions">
           {state.step !== "consent" && state.step !== "done" ? (
-            <button type="button" class="secondary" onClick={() => dispatch({ type: "back" })}>
+            <button
+              type="button"
+              class="secondary"
+              onClick={() => {
+                setDraft(null);
+                dispatch({ type: "back" });
+              }}
+            >
               Back
             </button>
           ) : null}
@@ -988,45 +1026,6 @@ function Manual(props: {
           </label>
         ))}
       </div>
-    </>
-  );
-}
-
-function Review(props: { state: CaptureState; preview: ScanResult | null }) {
-  if (props.state.step === "done") {
-    return <p class="status">Measurements sent. The camera is off.</p>;
-  }
-  if (!props.preview) {
-    return <p class="status">Check the measurements before the shop receives them.</p>;
-  }
-  return (
-    <>
-      <p class="status">
-        {props.preview.measurements[0]?.source === "user"
-          ? `These are body numbers you typed. Regular ease is added for the garment the shop cuts. Height ${props.preview.subject.heightCm} cm.`
-          : `Estimated measurements. Ranges are an error budget, not a tape study. Height ${props.preview.subject.heightCm} cm.`}
-      </p>
-      <ul>
-        {props.preview.measurements.map((measurement) => (
-          <li key={measurement.id}>
-            <span class="name">{measurement.label}</span>
-            <span class="detail">
-              {measurement.source === "user" ? "typed by you" : measurement.method} ·{" "}
-              {measurement.valueCm.toFixed(1)} cm
-              {measurement.rangeCm
-                ? ` (${measurement.rangeCm[0].toFixed(1)}–${measurement.rangeCm[1].toFixed(1)})`
-                : ""}
-            </span>
-            <span class="value">source {measurement.source}</span>
-          </li>
-        ))}
-      </ul>
-      <p class="hint">
-        Garment chest {props.preview.garmentMeasurements.chhatiCm} cm, waist{" "}
-        {props.preview.garmentMeasurements.kamarCm} cm, sleeve{" "}
-        {props.preview.garmentMeasurements.baazuCm} cm, length{" "}
-        {props.preview.garmentMeasurements.lambaiCm} cm.
-      </p>
     </>
   );
 }
