@@ -3,6 +3,8 @@ import {
   laplacianVariance,
   liveGates,
   meanLuma,
+  previewScaleCmPerPx,
+  selectStations,
   type DisplayUnits,
   type GarmentId,
   type GateOutcome,
@@ -406,7 +408,24 @@ export function Capture(props: {
     }
     canvas.width = 320;
     canvas.height = 240;
-    drawSkeleton(context, sample.landmarks, canvas.width, canvas.height);
+    const front = guide?.front;
+    const stations =
+      front?.mask == null
+        ? null
+        : selectStations({
+            mask: front.mask,
+            landmarks: front.landmarks,
+            scaleCmPerPx: previewScaleCmPerPx(front.mask, front.landmarks),
+            frontOnly: guide?.side == null,
+          });
+    drawSkeleton(
+      context,
+      sample.landmarks,
+      canvas.width,
+      canvas.height,
+      stations?.chest?.fraction ?? null,
+      stations?.waist?.fraction ?? null,
+    );
   }, [guide]);
 
   const stepNumber = Math.max(1, stepOrder.indexOf(state.step as (typeof stepOrder)[number]) + 1);

@@ -1,6 +1,6 @@
 # Tailor Scan — product and engineering plan
 
-Status: Milestone 6 adds pose guidance from a local model and a recorded fixture. Silhouette, calibration, and measurement math are not built yet.
+Status: Milestone 7 adds silhouette stations for chest and waist. Calibration and the measurement engine are not built yet.
 
 This document locks the MVP baseline. Later milestones should change a decision only when a tape-measure check or an integration review gives a reason, and the change should be recorded here.
 
