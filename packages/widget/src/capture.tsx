@@ -1,0 +1,803 @@
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
+import type { DisplayUnits, GarmentId, HemAnchor, ScanResult, SleevePath } from "@tailor-scan/core";
+import type { EmbedConfig, ScanError } from "./config";
+import {
+  captureReducer,
+  createCaptureState,
+  parseHeightCm,
+  parseManualNumbers,
+  manualFields,
+  type CaptureState,
+  type ManualField,
+} from "./flow";
+import { createManualResult } from "./manual-result";
+
+const prompts = [
+  "Prop the phone at about navel height, lens level, about 2 to 3 meters away.",
+  "On a laptop, raise the lid on books so the lens is not looking up from the desk.",
+  "Step back until your head and feet are both in frame.",
+  "Hold still.",
+  "Move your arms a little away from your sides.",
+  "Turn further until your chest points to the side.",
+];
+
+const stepOrder = ["consent", "order", "body", "camera", "manual", "review"] as const;
+
+const fieldCopy: Record<ManualField, { label: string; detail: string }> = {
+  chhati: { label: "Chhati", detail: "Chest" },
+  kamar: { label: "Kamar", detail: "Waist" },
+  baazu: { label: "Baazu", detail: "Sleeve length" },
+  lambai: { label: "Lambai", detail: "Garment length" },
+};
+
+const css = `
+:host {
+  display: block;
+  color: #1c2421;
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+}
+.panel {
+  box-sizing: border-box;
+  border: 1px solid #d5cec2;
+  background: #fbf8f2;
+  padding: 1.25rem 1.25rem 1rem;
+}
+.kicker, .step, .status, .meta, label, button, .error, li {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.kicker, .step {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #5e6a63;
+}
+.step { margin-top: 0.85rem; letter-spacing: 0.08em; }
+h2 {
+  margin: 0.35rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 560;
+  letter-spacing: -0.02em;
+}
+.status {
+  margin: 0.65rem 0 0;
+  max-width: 38rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #3d4742;
+}
+.meta, .hint {
+  margin: 0.45rem 0 0;
+  color: #5e6a63;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.fields, .choices {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.field { display: grid; gap: 0.3rem; font-size: 0.9rem; }
+.choice {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+input[type="text"], input[type="number"], select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d5cec2;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 1rem;
+  padding: 0.55rem 0.65rem;
+}
+.pair { display: grid; gap: 0.75rem; }
+ul {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+ul.prompts {
+  max-height: 11rem;
+  overflow: auto;
+}
+li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid #e4ddd1;
+  font-size: 0.92rem;
+}
+.prompt {
+  display: block;
+  padding: 0.45rem 0;
+  border-top: 0;
+}
+.name { font-family: "Iowan Old Style", Palatino, Georgia, serif; font-size: 1.05rem; }
+.detail { color: #5e6a63; font-size: 0.8rem; }
+.value { grid-row: 1 / span 2; align-self: center; font-size: 0.85rem; }
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--tailor-accent, #1f3a34);
+  color: #fbf8f2;
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--tailor-accent, #1f3a34);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+button:disabled { cursor: default; opacity: 0.55; }
+.error {
+  margin: 0.75rem 0 0;
+  color: #8a3d32;
+  font-size: 0.9rem;
+}
+video {
+  display: block;
+  width: 100%;
+  max-height: 16rem;
+  margin-top: 0.75rem;
+  background: #1c2421;
+}
+.guide-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.85rem;
+}
+.guide {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--tailor-accent, #1f3a34);
+  animation: tailor-pulse 1.6s ease-in-out infinite;
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+@media (min-width: 40rem) {
+  .pair { grid-template-columns: 1fr 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide { animation: none; }
+}
+@keyframes tailor-pulse {
+  50% { opacity: 0.35; }
+}
+`;
+
+export function Capture(props: {
+  sessionId: string;
+  garment: GarmentId;
+  displayUnits: DisplayUnits;
+  sleevePath?: SleevePath;
+  hemAnchor?: HemAnchor;
+  easePresets?: EmbedConfig["easePresets"];
+  exportKeypoints?: boolean;
+  sizeChart?: EmbedConfig["sizeChart"];
+  onProgress: (step: string) => void;
+  onComplete: (result: ScanResult) => void;
+  onCancel: () => void;
+  onError: (error: ScanError) => void;
+}) {
+  const [state, dispatch] = useReducer(
+    captureReducer,
+    { garment: props.garment, displayUnits: props.displayUnits },
+    createCaptureState,
+  );
+  const [spoken, setSpoken] = useState("");
+  const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const stepRef = useRef(state.step);
+  stepRef.current = state.step;
+
+  useLayoutEffect(() => {
+    dispatch({ type: "set-garment", garment: props.garment });
+  }, [props.garment]);
+
+  useLayoutEffect(() => {
+    dispatch({ type: "set-units", units: props.displayUnits });
+  }, [props.displayUnits]);
+
+  useEffect(() => {
+    if (state.step === "consent" || state.step === "done") {
+      return;
+    }
+    props.onProgress(state.step);
+  }, [state.step, props.onProgress]);
+
+  useEffect(() => {
+    if (state.step === "camera") {
+      return;
+    }
+    stopTracks(streamRef.current);
+    streamRef.current = null;
+  }, [state.step]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (video && stream) {
+      video.srcObject = stream;
+    }
+  }, [state.camera]);
+
+  useEffect(() => {
+    return () => {
+      stopTracks(streamRef.current);
+      streamRef.current = null;
+    };
+  }, []);
+
+  const stepNumber = Math.max(1, stepOrder.indexOf(state.step as (typeof stepOrder)[number]) + 1);
+  const typed = parseManualNumbers(state);
+  const preview = buildPreview(state, props, typed);
+
+  async function enableCamera(): Promise<void> {
+    dispatch({ type: "camera-request" });
+    const devices = navigator.mediaDevices;
+    if (!devices?.getUserMedia) {
+      dispatch({ type: "camera-missing" });
+      props.onError({ code: "camera-missing", message: "This browser has no camera." });
+      return;
+    }
+    try {
+      const stream = await devices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      if (stepRef.current !== "camera") {
+        stopTracks(stream);
+        return;
+      }
+      streamRef.current = stream;
+      dispatch({ type: "camera-live" });
+    } catch (error) {
+      const missing =
+        error instanceof DOMException &&
+        (error.name === "NotFoundError" || error.name === "NotSupportedError");
+      if (missing) {
+        dispatch({ type: "camera-missing" });
+        props.onError({ code: "camera-missing", message: "This browser has no camera." });
+        return;
+      }
+      dispatch({ type: "camera-denied" });
+      props.onError({ code: "camera-denied", message: "Camera access was blocked." });
+    }
+  }
+
+  function send(): void {
+    if (!preview.result) {
+      dispatch({
+        type: "fail",
+        message: preview.error ?? "These measurements could not be checked.",
+      });
+      return;
+    }
+    stopTracks(streamRef.current);
+    streamRef.current = null;
+    props.onComplete(preview.result);
+    dispatch({ type: "confirm" });
+  }
+
+  const continueDisabled =
+    (state.step === "consent" && !state.consentChecked) ||
+    (state.step === "order" && !state.adult) ||
+    (state.step === "body" && (parseHeightCm(state) == null || state.clothingFit === "")) ||
+    (state.step === "manual" && typed == null) ||
+    (state.step === "review" && preview.result == null);
+
+  return (
+    <>
+      <style>{css}</style>
+      <section class="panel" aria-labelledby="tailor-scan-title">
+        <p class="kicker">Tailor measurements</p>
+        <h2 id="tailor-scan-title">Tailor Scan</h2>
+        <p class="step">
+          {state.step === "done" ? "Sent" : `Step ${stepNumber} of ${stepOrder.length}`}
+        </p>
+        <p class="meta">
+          {state.garment} · display {props.displayUnits}
+        </p>
+        {state.step === "consent" ? <Consent state={state} dispatch={dispatch} /> : null}
+        {state.step === "order" ? (
+          <Order state={state} dispatch={dispatch} hasChart={Boolean(props.sizeChart?.length)} />
+        ) : null}
+        {state.step === "body" ? <Body state={state} dispatch={dispatch} /> : null}
+        {state.step === "camera" ? <Camera state={state} videoRef={videoRef} /> : null}
+        {state.step === "manual" ? <Manual state={state} dispatch={dispatch} /> : null}
+        {state.step === "review" || state.step === "done" ? (
+          <Review state={state} preview={preview.result} />
+        ) : null}
+        {state.error || preview.error ? (
+          <p class="error" role="alert">
+            {state.error ?? preview.error}
+          </p>
+        ) : null}
+        <div class="actions">
+          {state.step !== "consent" && state.step !== "done" ? (
+            <button type="button" class="secondary" onClick={() => dispatch({ type: "back" })}>
+              Back
+            </button>
+          ) : null}
+          {state.step === "consent" ? (
+            <button type="button" class="secondary" onClick={props.onCancel}>
+              No thanks
+            </button>
+          ) : null}
+          {state.step === "camera" ? (
+            <button
+              type="button"
+              class="secondary"
+              disabled={state.camera === "requesting"}
+              onClick={() => void enableCamera()}
+            >
+              {state.camera === "requesting" ? "Asking for the camera…" : "Turn on camera"}
+            </button>
+          ) : null}
+          {state.step !== "done" ? (
+            <button
+              type="button"
+              disabled={continueDisabled || state.camera === "requesting"}
+              onClick={() => advance(state, dispatch, send)}
+            >
+              {primaryLabel(state)}
+            </button>
+          ) : null}
+          <button type="button" class="secondary" onClick={() => setSpoken(scriptFor(state))}>
+            Read this step
+          </button>
+        </div>
+        <p class="sr" aria-live="polite">
+          {spoken}
+        </p>
+      </section>
+    </>
+  );
+}
+
+function Consent(props: {
+  state: CaptureState;
+  dispatch: (action: Parameters<typeof captureReducer>[1]) => void;
+}) {
+  return (
+    <>
+      <p class="status">
+        The camera stays on this device. Pictures are not uploaded. If you confirm, the shop
+        receives Chhati, Kamar, Baazu, and Lambai only.
+      </p>
+      <div class="choices">
+        <label class="choice">
+          <input
+            type="checkbox"
+            name="consent"
+            checked={props.state.consentChecked}
+            onChange={(event) =>
+              props.dispatch({
+                type: "check-consent",
+                checked: event.currentTarget.checked,
+              })
+            }
+          />
+          I have read this. The camera stays on this device, and pictures are not uploaded.
+        </label>
+      </div>
+    </>
+  );
+}
+
+function Order(props: {
+  state: CaptureState;
+  hasChart: boolean;
+  dispatch: (action: Parameters<typeof captureReducer>[1]) => void;
+}) {
+  return (
+    <>
+      <p class="status">Choose the garment and the units you want to read. This tool is for adults.</p>
+      <div class="fields">
+        <div class="pair">
+          <label class="field">
+            Garment
+            <select
+              name="garment"
+              value={props.state.garment}
+              onChange={(event) =>
+                props.dispatch({
+                  type: "set-garment",
+                  garment: event.currentTarget.value as GarmentId,
+                })
+              }
+            >
+              <option value="shirt">Shirt</option>
+              <option value="kurta">Kurta</option>
+              <option value="kameez">Kameez</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label class="field">
+            Units
+            <select
+              name="units"
+              value={props.state.displayUnits}
+              onChange={(event) =>
+                props.dispatch({
+                  type: "set-units",
+                  units: event.currentTarget.value as DisplayUnits,
+                })
+              }
+            >
+              <option value="cm">Centimeters</option>
+              <option value="in">Inches</option>
+            </select>
+          </label>
+        </div>
+        <label class="choice">
+          <input
+            type="checkbox"
+            name="adult"
+            checked={props.state.adult}
+            onChange={(event) =>
+              props.dispatch({ type: "set-adult", adult: event.currentTarget.checked })
+            }
+          />
+          I am an adult.
+        </label>
+        {props.hasChart ? (
+          <p class="hint">This shop sent a size chart. Matching sizes are included when you send.</p>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function Body(props: {
+  state: CaptureState;
+  dispatch: (action: Parameters<typeof captureReducer>[1]) => void;
+}) {
+  return (
+    <>
+      <p class="status">
+        Enter your height as you are dressed now, including shoes if you will wear them. Tie hair
+        up, empty pockets, and take off a dupatta or open jacket.
+      </p>
+      <div class="fields">
+        <div class="choices">
+          <label class="choice">
+            <input
+              type="radio"
+              name="height-mode"
+              value="cm"
+              checked={props.state.heightMode === "cm"}
+              onChange={() => props.dispatch({ type: "set-height-mode", mode: "cm" })}
+            />
+            Centimeters
+          </label>
+          <label class="choice">
+            <input
+              type="radio"
+              name="height-mode"
+              value="ft"
+              checked={props.state.heightMode === "ft"}
+              onChange={() => props.dispatch({ type: "set-height-mode", mode: "ft" })}
+            />
+            Feet and inches
+          </label>
+        </div>
+        {props.state.heightMode === "cm" ? (
+          <label class="field">
+            Height in centimeters
+            <input
+              type="number"
+              name="height-cm"
+              inputMode="decimal"
+              min="50"
+              max="250"
+              value={props.state.heightCmText}
+              onInput={(event) =>
+                props.dispatch({ type: "set-height-cm", value: event.currentTarget.value })
+              }
+            />
+          </label>
+        ) : (
+          <div class="pair">
+            <label class="field">
+              Feet
+              <input
+                type="number"
+                name="height-feet"
+                inputMode="numeric"
+                min="3"
+                max="8"
+                value={props.state.heightFeetText}
+                onInput={(event) =>
+                  props.dispatch({ type: "set-height-feet", value: event.currentTarget.value })
+                }
+              />
+            </label>
+            <label class="field">
+              Inches
+              <input
+                type="number"
+                name="height-inches"
+                inputMode="decimal"
+                min="0"
+                max="11"
+                value={props.state.heightInchesText}
+                onInput={(event) =>
+                  props.dispatch({ type: "set-height-inches", value: event.currentTarget.value })
+                }
+              />
+            </label>
+          </div>
+        )}
+        <fieldset class="choices">
+          <legend class="status">Are these clothes close-fitting?</legend>
+          <label class="choice">
+            <input
+              type="radio"
+              name="clothing"
+              value="close"
+              checked={props.state.clothingFit === "close"}
+              onChange={() => props.dispatch({ type: "set-clothing", fit: "close" })}
+            />
+            Yes, they are close-fitting
+          </label>
+          <label class="choice">
+            <input
+              type="radio"
+              name="clothing"
+              value="loose"
+              checked={props.state.clothingFit === "loose"}
+              onChange={() => props.dispatch({ type: "set-clothing", fit: "loose" })}
+            />
+            No, they are loose
+          </label>
+          <label class="choice">
+            <input
+              type="radio"
+              name="clothing"
+              value="unknown"
+              checked={props.state.clothingFit === "unknown"}
+              onChange={() => props.dispatch({ type: "set-clothing", fit: "unknown" })}
+            />
+            Not sure
+          </label>
+        </fieldset>
+      </div>
+    </>
+  );
+}
+
+function Camera(props: {
+  state: CaptureState;
+  videoRef: { current: HTMLVideoElement | null };
+}) {
+  return (
+    <>
+      <p class="status">
+        A second person holding the phone is the easier path. You can type the measurements if the
+        camera is unavailable.
+      </p>
+      <p class="guide-row">
+        <span class="guide" aria-hidden="true" />
+        Position
+      </p>
+      <ul class="prompts">
+        {prompts.map((prompt) => (
+          <li class="prompt" key={prompt}>
+            {prompt}
+          </li>
+        ))}
+      </ul>
+      {props.state.camera === "live" ? (
+        <video ref={props.videoRef} autoPlay muted playsInline aria-label="Camera preview" />
+      ) : null}
+      {props.state.camera === "denied" ? (
+        <p class="error" role="alert">
+          Camera access was blocked. In the browser site settings, allow the camera for this page,
+          then try again. You can also type the measurements.
+        </p>
+      ) : null}
+      {props.state.camera === "missing" ? (
+        <p class="error" role="alert">
+          This browser has no camera. Type the measurements instead.
+        </p>
+      ) : null}
+      {props.state.camera === "live" ? (
+        <p class="hint">The preview stays on this device. Pose capture is not connected yet.</p>
+      ) : null}
+    </>
+  );
+}
+
+function Manual(props: {
+  state: CaptureState;
+  dispatch: (action: Parameters<typeof captureReducer>[1]) => void;
+}) {
+  const unit = props.state.entryUnits === "in" ? "inches" : "centimeters";
+  return (
+    <>
+      <p class="status">
+        Use a tape if you have one. Enter each measurement in {unit}. These numbers are what the
+        shop receives.
+      </p>
+      <div class="fields pair">
+        {manualFields.map((field) => (
+          <label class="field" key={field}>
+            {fieldCopy[field].label}
+            <span class="detail">{fieldCopy[field].detail}</span>
+            <input
+              type="number"
+              name={field}
+              inputMode="decimal"
+              min="0"
+              value={props.state.manual[field]}
+              onInput={(event) =>
+                props.dispatch({ type: "set-manual", field, value: event.currentTarget.value })
+              }
+            />
+          </label>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Review(props: { state: CaptureState; preview: ScanResult | null }) {
+  if (props.state.step === "done") {
+    return <p class="status">Measurements sent. The camera is off.</p>;
+  }
+  if (!props.preview) {
+    return <p class="status">Check the measurements before the shop receives them.</p>;
+  }
+  return (
+    <>
+      <p class="status">
+        These are body numbers you typed. Regular ease is added for the garment the shop cuts.
+        Height {props.preview.subject.heightCm} cm.
+      </p>
+      <ul>
+        {props.preview.measurements.map((measurement) => (
+          <li key={measurement.id}>
+            <span class="name">{measurement.label}</span>
+            <span class="detail">typed by you · {measurement.valueCm.toFixed(1)} cm</span>
+            <span class="value">source user</span>
+          </li>
+        ))}
+      </ul>
+      <p class="hint">
+        Garment chest {props.preview.garmentMeasurements.chhatiCm} cm, waist{" "}
+        {props.preview.garmentMeasurements.kamarCm} cm, sleeve{" "}
+        {props.preview.garmentMeasurements.baazuCm} cm, length{" "}
+        {props.preview.garmentMeasurements.lambaiCm} cm.
+      </p>
+    </>
+  );
+}
+
+function advance(
+  state: CaptureState,
+  dispatch: (action: Parameters<typeof captureReducer>[1]) => void,
+  send: () => void,
+): void {
+  if (state.step === "consent") {
+    dispatch({ type: "accept-consent" });
+  } else if (state.step === "order") {
+    dispatch({ type: "continue-order" });
+  } else if (state.step === "body") {
+    dispatch({ type: "continue-body" });
+  } else if (state.step === "camera") {
+    dispatch({ type: "skip-camera" });
+  } else if (state.step === "manual") {
+    dispatch({ type: "submit-manual" });
+  } else if (state.step === "review") {
+    send();
+  }
+}
+
+function primaryLabel(state: CaptureState): string {
+  if (state.step === "camera") {
+    return "Enter measurements instead";
+  }
+  if (state.step === "manual") {
+    return "Review measurements";
+  }
+  if (state.step === "review") {
+    return "Send measurements";
+  }
+  return "Continue";
+}
+
+function scriptFor(state: CaptureState): string {
+  if (state.step === "camera") {
+    return `Camera. ${prompts.join(" ")}`;
+  }
+  if (state.step === "consent") {
+    return "Consent. The camera stays on this device. Pictures are not uploaded.";
+  }
+  if (state.step === "order") {
+    return "Order setup. Choose a garment and units, and confirm you are an adult.";
+  }
+  if (state.step === "body") {
+    return "Body setup. Enter height as dressed now, including shoes, and say if the clothes are close-fitting.";
+  }
+  if (state.step === "manual") {
+    return "Type Chhati, Kamar, Baazu, and Lambai.";
+  }
+  if (state.step === "review") {
+    return "Review the typed measurements, then send them.";
+  }
+  return "Measurements sent.";
+}
+
+function buildPreview(
+  state: CaptureState,
+  props: {
+    sleevePath?: SleevePath;
+    hemAnchor?: HemAnchor;
+    easePresets?: EmbedConfig["easePresets"];
+    exportKeypoints?: boolean;
+    sizeChart?: EmbedConfig["sizeChart"];
+    sessionId?: string;
+  },
+  typed: ReturnType<typeof parseManualNumbers>,
+): { result: ScanResult | null; error: string | null } {
+  if (state.step !== "review" && state.step !== "done") {
+    return { result: null, error: null };
+  }
+  if (typed == null || state.heightCm == null || state.clothingFit === "") {
+    return { result: null, error: "Enter all four measurements before sending." };
+  }
+  try {
+    return {
+      result: createManualResult({
+        sessionId: props.sessionId ?? "session",
+        displayUnits: state.entryUnits,
+        garment: state.garment,
+        heightCm: state.heightCm,
+        clothingFit: state.clothingFit,
+        chhati: typed.chhati,
+        kamar: typed.kamar,
+        baazu: typed.baazu,
+        lambai: typed.lambai,
+        sleevePath: props.sleevePath,
+        hemAnchor: props.hemAnchor,
+        easePresets: props.easePresets,
+        exportKeypoints: props.exportKeypoints,
+        sizeChart: props.sizeChart,
+      }),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      result: null,
+      error: error instanceof Error ? error.message : "These measurements could not be checked.",
+    };
+  }
+}
+
+function stopTracks(stream: MediaStream | null): void {
+  stream?.getTracks().forEach((track) => {
+    track.stop();
+  });
+}

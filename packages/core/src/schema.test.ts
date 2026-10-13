@@ -48,6 +48,31 @@ describe("scan result schema", () => {
     expect(validated.ok).toBe(true);
   });
 
+  it("accepts a manual result with no pixel scale", () => {
+    const measurements = fixture.measurements.map((measurement) => {
+      if (measurement.id === "chhati" || measurement.id === "kamar") {
+        return { ...measurement, source: "user", method: "manual", rangeCm: null, stationFraction: null };
+      }
+      if (measurement.id === "baazu") {
+        return { ...measurement, source: "user", method: "manual", rangeCm: null };
+      }
+      return { ...measurement, source: "user", method: "manual", rangeCm: null };
+    });
+    const validated = validateScanResult({
+      ...fixture,
+      calibration: {
+        method: "height",
+        frontScaleCmPerPx: null,
+        sideScaleCmPerPx: null,
+        agreement: "height-only",
+        confidence: "low",
+      },
+      quality: { front: "skipped", side: "skipped", warnings: ["Typed in by the customer."] },
+      measurements,
+    });
+    expect(validated.ok).toBe(true);
+  });
+
   it("accepts a manual girth with no camera range", () => {
     const measurements = fixture.measurements.map((measurement) =>
       measurement.id === "chhati"

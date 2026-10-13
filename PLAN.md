@@ -1,6 +1,6 @@
 # Tailor Scan — product and engineering plan
 
-Status: Milestone 3 adds the embed shells (script API, web component, iframe) with a sample result. Capture and measurement math are not built yet.
+Status: Milestone 4 adds the capture flow (consent, setup, prompts, and manual entry). Pose, frame quality, and measurement math are not built yet.
 
 This document locks the MVP baseline. Later milestones should change a decision only when a tape-measure check or an integration review gives a reason, and the change should be recorded here.
 
@@ -416,7 +416,7 @@ The host sends `{ source: "tailor-scan-host", version: 1, sessionId, type: "init
 
 ### Result schema `tailor-scan.result.v1`
 
-Canonical numbers are centimeters. `displayUnits` tells the host how the customer was viewing them. Inches = centimeters / 2.54, displayed to the nearest ¼ inch.
+Canonical numbers are centimeters. `displayUnits` tells the host how the customer was viewing them. Inches = centimeters / 2.54, displayed to the nearest ¼ inch. A manual entry has no pixel scale, so `frontScaleCmPerPx` and `sideScaleCmPerPx` are null and `agreement` is `height-only`.
 
 ```json
 {
