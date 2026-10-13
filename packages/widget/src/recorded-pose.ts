@@ -1,4 +1,10 @@
-import { POSE_LANDMARK_COUNT, PoseIndex, type ImageLandmark, type VisionSample } from "@tailor-scan/core";
+import {
+  POSE_LANDMARK_COUNT,
+  PoseIndex,
+  type ImageLandmark,
+  type PersonMask,
+  type VisionSample,
+} from "@tailor-scan/core";
 
 const frontPoints: Record<number, { x: number; y: number }> = {
   [PoseIndex.nose]: { x: 0.5, y: 0.14 },
@@ -38,13 +44,87 @@ export function recordedSample(view: "front" | "side", timestampMs: number): Vis
       z: view === "side" ? 0.02 : 0,
       visibility: 1,
     })),
-    mask: null,
+    mask: recordedMask(),
     imageWidth: 640,
     imageHeight: 800,
     timestampMs,
     luma: 128,
     sharpness: 40,
   };
+}
+
+function recordedMask(): PersonMask {
+  const width = 160;
+  const height = 200;
+  const person = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const half = torsoHalfPx(y);
+    if (half > 0) {
+      const center = width / 2;
+      fillSpan(person, width, y, center - half, center + half);
+    }
+  }
+  stampBone(person, width, height, [0.38, 0.28, 0.3, 0.42, 0.28, 0.55], 4);
+  stampBone(person, width, height, [0.62, 0.28, 0.7, 0.42, 0.72, 0.55], 4);
+  return { width, height, person };
+}
+
+function torsoHalfPx(y: number): number {
+  if (y < 16 || y > 180) {
+    return 0;
+  }
+  if (y < 36) {
+    return 12;
+  }
+  if (y >= 66 && y <= 78) {
+    return 22;
+  }
+  if (y >= 86 && y <= 98) {
+    return 8;
+  }
+  return 14;
+}
+
+function fillSpan(person: Uint8Array, width: number, y: number, start: number, end: number): void {
+  const left = Math.max(0, Math.floor(start));
+  const right = Math.min(width - 1, Math.ceil(end));
+  const offset = y * width;
+  for (let x = left; x <= right; x += 1) {
+    person[offset + x] = 1;
+  }
+}
+
+function stampBone(
+  person: Uint8Array,
+  width: number,
+  height: number,
+  points: readonly number[],
+  radius: number,
+): void {
+  for (let index = 0; index < points.length - 2; index += 2) {
+    const x0 = points[index]! * width;
+    const y0 = points[index + 1]! * height;
+    const x1 = points[index + 2]! * width;
+    const y1 = points[index + 3]! * height;
+    const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0));
+    for (let step = 0; step <= steps; step += 1) {
+      const t = steps === 0 ? 0 : step / steps;
+      const cx = x0 + (x1 - x0) * t;
+      const cy = y0 + (y1 - y0) * t;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (dx * dx + dy * dy > radius * radius) {
+            continue;
+          }
+          const x = Math.round(cx + dx);
+          const y = Math.round(cy + dy);
+          if (x >= 0 && y >= 0 && x < width && y < height) {
+            person[y * width + x] = 1;
+          }
+        }
+      }
+    }
+  }
 }
 
 function sidePoint(index: number, point: { x: number; y: number }): { x: number; y: number } {

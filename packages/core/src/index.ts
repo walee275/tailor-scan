@@ -79,6 +79,14 @@ export {
 export { type PersonMask, type VisionSample, type WorldLandmark } from "./vision";
 
 export {
+  previewScaleCmPerPx,
+  selectStations,
+  shoulderHipAxis,
+  type StationPick,
+  type StationSelection,
+} from "./stations";
+
+export {
   POSE_LANDMARK_COUNT,
   PoseIndex,
   blurFloor,
