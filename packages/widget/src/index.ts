@@ -9,6 +9,9 @@ export {
   WIDGET_SOURCE,
 } from "./protocol";
 export { open } from "./session";
+export { setDefaultVisionProvider, type VisionProvider } from "./vision-host";
+export { localVisionAssets } from "./vision-assets";
+export { openWithDelegateFallback } from "./pose-backend";
 
 import { bindIframeSession } from "./iframe";
 import { defineTailorScan } from "./element";

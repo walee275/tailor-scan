@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.1.0",
     "@tailor-scan/widget": "0.0.0"
   },
   "devDependencies": {
