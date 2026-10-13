@@ -11,6 +11,9 @@ export default defineConfig({
       fileName: (format) =>
         format === "es" ? "tailor-scan.js" : "tailor-scan.iife.js",
     },
+    rollupOptions: {
+      external: ["three"],
+    },
     emptyOutDir: true,
   },
   test: {
