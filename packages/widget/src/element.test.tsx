@@ -22,4 +22,15 @@ describe("tailor-scan element", () => {
       expect(text).toContain("Not measured");
     }
   });
+
+  it("reads garment and display units from attributes", () => {
+    const element = document.createElement("tailor-scan");
+    element.setAttribute("garment", "kameez");
+    element.setAttribute("display-units", "in");
+    document.body.append(element);
+
+    const text = element.shadowRoot?.textContent ?? "";
+    expect(text).toContain("kameez");
+    expect(text).toContain("display in");
+  });
 });
