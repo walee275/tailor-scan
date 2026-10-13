@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { captureReducer, createCaptureState, parseHeightCm, parseManualNumbers } from "./flow";
+import {
+  captureReducer,
+  captureStepProgress,
+  createCaptureState,
+  parseHeightCm,
+  parseManualNumbers,
+} from "./flow";
 
 describe("capture flow", () => {
   it("stays on consent until the box is ticked", () => {
@@ -66,6 +72,30 @@ describe("capture flow", () => {
     state = captureReducer(state, { type: "submit-manual" });
     state = captureReducer(state, { type: "confirm" });
     expect(state.step).toBe("done");
+  });
+
+  it("numbers camera review as the next step, without counting manual entry", () => {
+    let state = reachCamera(createCaptureState({ garment: "kurta", displayUnits: "cm" }));
+    expect(captureStepProgress(state)).toEqual({ current: 4, total: 5 });
+    state = captureReducer(state, { type: "review-camera" });
+    expect(state.reading).toBe("camera");
+    expect(captureStepProgress(state)).toEqual({ current: 5, total: 5 });
+
+    let typed = reachCamera(createCaptureState({ garment: "kurta", displayUnits: "cm" }));
+    typed = captureReducer(typed, { type: "skip-camera" });
+    expect(captureStepProgress(typed)).toEqual({ current: 5, total: 6 });
+    typed = captureReducer(typed, { type: "submit-manual" });
+    expect(captureStepProgress(typed)).toEqual({ current: 5, total: 6 });
+    for (const [field, value] of [
+      ["chhati", "96"],
+      ["kamar", "84"],
+      ["baazu", "60"],
+      ["lambai", "102"],
+    ] as const) {
+      typed = captureReducer(typed, { type: "set-manual", field, value });
+    }
+    typed = captureReducer(typed, { type: "submit-manual" });
+    expect(captureStepProgress(typed)).toEqual({ current: 6, total: 6 });
   });
 
   it("rejects a height outside the dressed range", () => {

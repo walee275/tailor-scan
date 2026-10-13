@@ -44,7 +44,7 @@ export function recordedSample(view: "front" | "side", timestampMs: number): Vis
       z: view === "side" ? 0.02 : 0,
       visibility: 1,
     })),
-    mask: recordedMask(),
+    mask: recordedMask(view),
     imageWidth: 640,
     imageHeight: 800,
     timestampMs,
@@ -53,36 +53,47 @@ export function recordedSample(view: "front" | "side", timestampMs: number): Vis
   };
 }
 
-function recordedMask(): PersonMask {
+function recordedMask(view: "front" | "side"): PersonMask {
   const width = 160;
   const height = 200;
   const person = new Uint8Array(width * height);
   for (let y = 0; y < height; y += 1) {
-    const half = torsoHalfPx(y);
+    const half = torsoHalfPx(y, view);
     if (half > 0) {
       const center = width / 2;
       fillSpan(person, width, y, center - half, center + half);
     }
   }
-  stampBone(person, width, height, [0.38, 0.28, 0.3, 0.42, 0.28, 0.55], 4);
-  stampBone(person, width, height, [0.62, 0.28, 0.7, 0.42, 0.72, 0.55], 4);
+  if (view === "front") {
+    stampBone(person, width, height, armChain(view, PoseIndex.leftShoulder, PoseIndex.leftElbow, PoseIndex.leftWrist), 4);
+    stampBone(person, width, height, armChain(view, PoseIndex.rightShoulder, PoseIndex.rightElbow, PoseIndex.rightWrist), 4);
+  }
   return { width, height, person };
 }
 
-function torsoHalfPx(y: number): number {
+function armChain(view: "front" | "side", shoulder: number, elbow: number, wrist: number): number[] {
+  return [shoulder, elbow, wrist].flatMap((index) => {
+    const point = frontPoints[index]!;
+    const placed = view === "side" ? sidePoint(index, point) : point;
+    return [placed.x, placed.y];
+  });
+}
+
+function torsoHalfPx(y: number, view: "front" | "side"): number {
   if (y < 16 || y > 180) {
     return 0;
   }
   if (y < 36) {
-    return 12;
+    return view === "side" ? 8 : 12;
   }
-  if (y >= 66 && y <= 78) {
-    return 22;
+  // Chest and waist halves are a close-fitting 175 cm body: front diameters about 36 cm and 32 cm, side depths about 25 cm.
+  if (y >= 64 && y <= 80) {
+    return view === "side" ? 11 : 16;
   }
-  if (y >= 86 && y <= 98) {
-    return 8;
+  if (y >= 84 && y <= 100) {
+    return view === "side" ? 11 : 14;
   }
-  return 14;
+  return view === "side" ? 10 : 15;
 }
 
 function fillSpan(person: Uint8Array, width: number, y: number, start: number, end: number): void {
