@@ -59,6 +59,7 @@ export class TailorScanElement extends HTMLElement {
         easePresets={this.#config.easePresets}
         exportKeypoints={this.#config.exportKeypoints}
         sizeChart={this.#config.sizeChart}
+        createVisionProvider={this.#config.createVisionProvider}
         onProgress={this.#progress}
         onComplete={this.#complete}
         onCancel={this.#cancel}

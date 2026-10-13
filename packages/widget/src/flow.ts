@@ -30,6 +30,7 @@ export type CaptureState = {
   heightCm: number | null;
   clothingFit: ClothingFit | "";
   camera: CameraPhase;
+  reading: "none" | "manual" | "camera";
   manual: Record<ManualField, string>;
   error: string | null;
 };
@@ -53,6 +54,7 @@ export type CaptureAction =
   | { type: "camera-denied" }
   | { type: "camera-missing" }
   | { type: "skip-camera" }
+  | { type: "review-camera" }
   | { type: "set-manual"; field: ManualField; value: string }
   | { type: "submit-manual" }
   | { type: "confirm" }
@@ -85,6 +87,7 @@ export function createCaptureState(input: {
     heightCm: null,
     clothingFit: "",
     camera: "idle",
+    reading: "none",
     manual: { chhati: "", kamar: "", baazu: "", lambai: "" },
     error: null,
   };
@@ -162,7 +165,9 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
       if (state.step !== "camera") {
         return state;
       }
-      return { ...state, step: "manual", entryUnits: state.displayUnits, error: null };
+      return { ...state, step: "manual", reading: "manual", entryUnits: state.displayUnits, error: null };
+    case "review-camera":
+      return state.step === "camera" ? { ...state, step: "review", reading: "camera", error: null } : state;
     case "set-manual":
       return {
         ...state,
@@ -176,10 +181,13 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
       if (parseManualNumbers(state) == null) {
         return { ...state, error: "Enter all four measurements as numbers greater than zero." };
       }
-      return { ...state, step: "review", error: null };
+      return { ...state, step: "review", reading: "manual", error: null };
     case "confirm":
       return state.step === "review" ? { ...state, step: "done", error: null } : state;
     case "back": {
+      if (state.step === "review" && state.reading === "camera") {
+        return { ...state, step: "camera", error: null };
+      }
       const step = previousStep[state.step];
       return step ? { ...state, step, error: null } : state;
     }

@@ -1,8 +1,12 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import {
+  calibrateHeight,
   laplacianVariance,
   liveGates,
   meanLuma,
+  PoseIndex,
+  previewScaleCmPerPx,
+  selectStations,
   type DisplayUnits,
   type GarmentId,
   type GateOutcome,
@@ -21,7 +25,14 @@ import {
   type ManualField,
 } from "./flow";
 import { GateChips } from "./chips";
+import { CalibrationPanel } from "./calibration-panel";
 import { createManualResult } from "./manual-result";
+import { createCameraResult } from "./camera-result";
+import { ReviewEditor } from "./review-editor";
+import { createGuide, runRecordedGuide, stepGuide, type GuideSnapshot } from "./pose-guide";
+import { drawSkeleton } from "./skeleton";
+import { blurHead, bindSessionTeardown } from "./privacy";
+import { getDefaultVisionProvider, type VisionProvider } from "./vision-host";
 
 const prompts = [
   "Prop the phone at about navel height, lens level, about 2 to 3 meters away.",
@@ -159,12 +170,64 @@ button:disabled { cursor: default; opacity: 0.55; }
   color: #8a3d32;
   font-size: 0.9rem;
 }
-video {
+.stage {
+  position: relative;
+  margin-top: 0.75rem;
+  background: #1c2421;
+  min-height: 8rem;
+}
+.stage video,
+.stage canvas {
   display: block;
   width: 100%;
   max-height: 16rem;
+}
+.stage canvas {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  pointer-events: none;
+}
+.calibration { margin-top: 0.85rem; }
+.pad {
+  position: relative;
   margin-top: 0.75rem;
+  height: 9rem;
   background: #1c2421;
+  touch-action: none;
+}
+.loft {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin-top: 0.85rem;
+  background: #1c2421;
+}
+table.measure {
+  width: 100%;
+  margin-top: 0.85rem;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+table.measure th,
+table.measure td {
+  text-align: left;
+  padding: 0.45rem 0.35rem;
+  border-top: 1px solid #e4ddd1;
+  vertical-align: top;
+}
+.tape {
+  width: 9rem;
+  margin-top: 0.75rem;
+}
+.tape path {
+  fill: none;
+  stroke: #1f3a34;
+  stroke-width: 1.4;
+}
+.tape text {
+  fill: #5e6a63;
+  font-size: 8px;
 }
 .chips {
   display: grid;
@@ -231,6 +294,7 @@ export function Capture(props: {
   easePresets?: EmbedConfig["easePresets"];
   exportKeypoints?: boolean;
   sizeChart?: EmbedConfig["sizeChart"];
+  createVisionProvider?: () => Promise<VisionProvider>;
   onProgress: (step: string) => void;
   onComplete: (result: ScanResult) => void;
   onCancel: () => void;
@@ -246,6 +310,12 @@ export function Capture(props: {
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [gates, setGates] = useState<GateOutcome[]>(() => emptyGates());
+  const [guide, setGuide] = useState<GuideSnapshot | null>(null);
+  const [imageScale, setImageScale] = useState<number | null>(null);
+  const [cameraResult, setCameraResult] = useState<ScanResult | null>(null);
+  const [draft, setDraft] = useState<ScanResult | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const replayTimer = useRef<number | null>(null);
   const stepRef = useRef(state.step);
   stepRef.current = state.step;
 
@@ -285,14 +355,37 @@ export function Capture(props: {
       return;
     }
     let stopped = false;
+    let busy = false;
     let last = 0;
+    let provider: VisionProvider | null = null;
+    let guideState = createGuide();
+    const factory = props.createVisionProvider ?? getDefaultVisionProvider();
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (factory) {
+      void factory()
+        .then((opened) => {
+          if (stopped) {
+            opened.close();
+            return;
+          }
+          provider = opened;
+        })
+        .catch((error: unknown) => {
+          if (stopped) {
+            return;
+          }
+          props.onError({
+            code: "model-load-failed",
+            message: error instanceof Error ? error.message : "The pose model did not load.",
+          });
+        });
+    }
     const tick = (now: number) => {
       if (stopped) {
         return;
       }
-      if (context && now - last > 250) {
+      if (context && !busy && now - last > 250) {
         last = now;
         const video = videoRef.current;
         if (video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -300,15 +393,37 @@ export function Capture(props: {
           canvas.height = video.videoHeight;
           context.drawImage(video, 0, 0);
           const frame = context.getImageData(0, 0, canvas.width, canvas.height);
-          setGates(
-            liveGates({
-              luma: meanLuma(frame.data),
-              laplacian: laplacianVariance(frame.data, canvas.width, canvas.height),
-              imageHeight: canvas.height,
-              landmarks: null,
-              recent: [],
-            }),
-          );
+          const luma = meanLuma(frame.data);
+          const sharpness = laplacianVariance(frame.data, canvas.width, canvas.height);
+          busy = true;
+          void Promise.resolve(provider ? provider.sample(video, now) : null)
+            .then((sampled) => {
+              if (stopped) {
+                return;
+              }
+              if (!sampled) {
+                setGates(
+                  liveGates({
+                    luma,
+                    laplacian: sharpness,
+                    imageHeight: canvas.height,
+                    landmarks: null,
+                    recent: [],
+                  }),
+                );
+                return;
+              }
+              guideState = stepGuide(
+                guideState,
+                { ...sampled, luma, sharpness, imageWidth: canvas.width, imageHeight: canvas.height },
+                now,
+              );
+              setGuide(guideState);
+              setGates(guideState.gates);
+            })
+            .finally(() => {
+              busy = false;
+            });
         }
       }
       requestAnimationFrame(tick);
@@ -317,19 +432,163 @@ export function Capture(props: {
     return () => {
       stopped = true;
       cancelAnimationFrame(frameId);
+      provider?.close();
     };
-  }, [state.step, state.camera]);
+  }, [state.step, state.camera, props.createVisionProvider, props.onError]);
 
   useEffect(() => {
-    return () => {
+    const unbind = bindSessionTeardown(() => {
       stopTracks(streamRef.current);
       streamRef.current = null;
+    });
+    return () => {
+      unbind();
+      stopTracks(streamRef.current);
+      streamRef.current = null;
+      if (replayTimer.current != null) {
+        window.clearInterval(replayTimer.current);
+      }
     };
   }, []);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const sample = guide?.side ?? guide?.front ?? guide?.burst.at(-1);
+    if (!canvas || !sample) {
+      return;
+    }
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+    canvas.width = 320;
+    canvas.height = 240;
+    const front = guide?.front;
+    const heightCal =
+      front?.mask == null || state.heightCm == null
+        ? null
+        : calibrateHeight({
+            mask: front.mask,
+            landmarks: front.landmarks,
+            imageHeight: front.imageHeight,
+            enteredHeightCm: state.heightCm,
+          });
+    const imageCmPerPx = imageScale ?? heightCal?.scaleCmPerPx ?? null;
+    const stations =
+      front?.mask == null
+        ? null
+        : selectStations({
+            mask: front.mask,
+            landmarks: front.landmarks,
+            scaleCmPerPx:
+              imageCmPerPx == null
+                ? previewScaleCmPerPx(front.mask, front.landmarks, state.heightCm ?? 170)
+                : imageCmPerPx * (front.imageWidth / front.mask.width),
+            frontOnly: guide?.side == null,
+          });
+    const video = videoRef.current;
+    const liveFrame = Boolean(video && video.readyState >= 2 && video.videoWidth > 0);
+    if (liveFrame && video) {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const nose = sample.landmarks[PoseIndex.nose];
+      if (nose) {
+        const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+        blurHead(frame.data, canvas.width, canvas.height, {
+          x: nose.x * canvas.width,
+          y: nose.y * canvas.height,
+          radius: canvas.width * 0.12,
+        });
+        context.putImageData(frame, 0, 0);
+      }
+    }
+    drawSkeleton(
+      context,
+      sample.landmarks,
+      canvas.width,
+      canvas.height,
+      stations?.chest?.fraction ?? null,
+      stations?.waist?.fraction ?? null,
+      liveFrame,
+    );
+    if (heightCal?.crown) {
+      const y = (heightCal.crown.y / sample.imageHeight) * canvas.height;
+      context.strokeStyle = "#f4efe4";
+      context.beginPath();
+      context.moveTo(canvas.width * 0.42, y);
+      context.lineTo(canvas.width * 0.58, y);
+      context.stroke();
+    }
+  }, [guide, imageScale, state.heightCm]);
+
   const stepNumber = Math.max(1, stepOrder.indexOf(state.step as (typeof stepOrder)[number]) + 1);
   const typed = parseManualNumbers(state);
-  const preview = buildPreview(state, props, typed);
+  const manualPreview = buildPreview(state, props, typed);
+  const preview =
+    state.reading === "camera" && (state.step === "review" || state.step === "done")
+      ? {
+          result: cameraResult,
+          error: cameraResult ? null : "The camera estimates are not ready.",
+        }
+      : manualPreview;
+
+  function reviewCamera(): void {
+    if (!guide?.front || state.heightCm == null || state.clothingFit === "") {
+      return;
+    }
+    const result = createCameraResult({
+      sessionId: props.sessionId,
+      displayUnits: state.displayUnits,
+      garment: state.garment,
+      heightCm: state.heightCm,
+      clothingFit: state.clothingFit,
+      front: guide.front,
+      side: guide.side,
+      sleevePath: props.sleevePath,
+      hemAnchor: props.hemAnchor,
+      easePresets: props.easePresets,
+      exportKeypoints: props.exportKeypoints,
+      sizeChart: props.sizeChart,
+    });
+    if (!result) {
+      dispatch({
+        type: "fail",
+        message: "The pose did not produce a chest and waist. You can type the measurements.",
+      });
+      return;
+    }
+    setCameraResult(result);
+    dispatch({ type: "review-camera" });
+  }
+
+  function replayRecordedPose(): void {
+    if (replayTimer.current != null) {
+      window.clearInterval(replayTimer.current);
+    }
+    const frames = runRecordedGuide();
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const last = frames[frames.length - 1];
+    if (!last) {
+      return;
+    }
+    if (reduced) {
+      setGuide(last);
+      setGates(last.gates);
+      return;
+    }
+    let index = 0;
+    replayTimer.current = window.setInterval(() => {
+      const frame = frames[index];
+      if (!frame) {
+        if (replayTimer.current != null) {
+          window.clearInterval(replayTimer.current);
+        }
+        return;
+      }
+      setGuide(frame);
+      setGates(frame.gates);
+      index += 1;
+    }, 80);
+  }
 
   async function enableCamera(): Promise<void> {
     dispatch({ type: "camera-request" });
@@ -362,7 +621,8 @@ export function Capture(props: {
   }
 
   function send(): void {
-    if (!preview.result) {
+    const result = draft ?? preview.result;
+    if (!result) {
       dispatch({
         type: "fail",
         message: preview.error ?? "These measurements could not be checked.",
@@ -371,7 +631,7 @@ export function Capture(props: {
     }
     stopTracks(streamRef.current);
     streamRef.current = null;
-    props.onComplete(preview.result);
+    props.onComplete(result);
     dispatch({ type: "confirm" });
   }
 
@@ -380,7 +640,7 @@ export function Capture(props: {
     (state.step === "order" && !state.adult) ||
     (state.step === "body" && (parseHeightCm(state) == null || state.clothingFit === "")) ||
     (state.step === "manual" && typed == null) ||
-    (state.step === "review" && preview.result == null);
+    (state.step === "review" && (draft ?? preview.result) == null);
 
   return (
     <>
@@ -411,11 +671,25 @@ export function Capture(props: {
           />
         ) : null}
         {state.step === "body" ? <Body state={state} dispatch={dispatch} /> : null}
-        {state.step === "camera" ? <Camera state={state} videoRef={videoRef} gates={gates} /> : null}
-        {state.step === "manual" ? <Manual state={state} dispatch={dispatch} /> : null}
-        {state.step === "review" || state.step === "done" ? (
-          <Review state={state} preview={preview.result} />
+        {state.step === "camera" ? (
+          <Camera
+            state={state}
+            videoRef={videoRef}
+            canvasRef={canvasRef}
+            gates={gates}
+            guide={guide}
+            onImageScale={setImageScale}
+          />
         ) : null}
+        {state.step === "manual" ? <Manual state={state} dispatch={dispatch} /> : null}
+        {state.step === "review" && (draft ?? preview.result) ? (
+          <ReviewEditor
+            result={(draft ?? preview.result)!}
+            easePresets={props.easePresets}
+            onChange={setDraft}
+          />
+        ) : null}
+        {state.step === "done" ? <p class="status">Measurements sent. The camera is off.</p> : null}
         {state.error || preview.error ? (
           <p class="error" role="alert">
             {state.error ?? preview.error}
@@ -423,7 +697,14 @@ export function Capture(props: {
         ) : null}
         <div class="actions">
           {state.step !== "consent" && state.step !== "done" && state.step !== "cancelled" ? (
-            <button type="button" class="secondary" onClick={() => dispatch({ type: "back" })}>
+            <button
+              type="button"
+              class="secondary"
+              onClick={() => {
+                setDraft(null);
+                dispatch({ type: "back" });
+              }}
+            >
               Back
             </button>
           ) : null}
@@ -447,6 +728,16 @@ export function Capture(props: {
               onClick={() => void enableCamera()}
             >
               {state.camera === "requesting" ? "Asking for the camera…" : "Turn on camera"}
+            </button>
+          ) : null}
+          {state.step === "camera" ? (
+            <button type="button" class="secondary" onClick={replayRecordedPose}>
+              Replay recorded pose
+            </button>
+          ) : null}
+          {state.step === "camera" && guide?.phase === "done" ? (
+            <button type="button" onClick={reviewCamera}>
+              Review camera estimates
             </button>
           ) : null}
           {state.step !== "done" && state.step !== "cancelled" ? (
@@ -685,14 +976,33 @@ function Body(props: {
 function Camera(props: {
   state: CaptureState;
   videoRef: { current: HTMLVideoElement | null };
+  canvasRef: { current: HTMLCanvasElement | null };
   gates: GateOutcome[];
+  guide: GuideSnapshot | null;
+  onImageScale: (scaleCmPerPx: number | null) => void;
 }) {
+  const front = props.guide?.front ?? null;
+  const height =
+    front?.mask == null || props.state.heightCm == null
+      ? null
+      : calibrateHeight({
+          mask: front.mask,
+          landmarks: front.landmarks,
+          imageHeight: front.imageHeight,
+          enteredHeightCm: props.state.heightCm,
+        });
   return (
     <>
       <p class="status">
-        A second person holding the phone is the easier path. You can type the measurements if the
-        camera is unavailable.
+        {props.guide?.prompt ??
+          "A second person holding the phone is the easier path. You can type the measurements if the camera is unavailable."}
       </p>
+      <div class="stage">
+        {props.state.camera === "live" ? (
+          <video ref={props.videoRef} autoPlay muted playsInline aria-label="Camera preview" />
+        ) : null}
+        <canvas ref={props.canvasRef} aria-hidden="true" />
+      </div>
       <GateChips gates={props.gates} />
       <p class="guide-row">
         <span class="guide" aria-hidden="true" />
@@ -705,9 +1015,6 @@ function Camera(props: {
           </li>
         ))}
       </ul>
-      {props.state.camera === "live" ? (
-        <video ref={props.videoRef} autoPlay muted playsInline aria-label="Camera preview" />
-      ) : null}
       {props.state.camera === "denied" ? (
         <p class="error" role="alert">
           Camera access was blocked. In the browser site settings, allow the camera for this page,
@@ -719,9 +1026,16 @@ function Camera(props: {
           This browser has no camera. Type the measurements instead.
         </p>
       ) : null}
-      {props.state.camera === "live" ? (
-        <p class="hint">The preview stays on this device. Pose capture is not connected yet.</p>
-      ) : null}
+      <p class="hint">
+        The preview stays on this device. The face is flattened on the preview and does not leave this
+        page. Replay uses a recorded pose. A live camera loads the local pose model when this page
+        provides one.
+      </p>
+      <CalibrationPanel
+        heightScaleCmPerPx={height?.scaleCmPerPx ?? null}
+        sample={front}
+        onImageScale={props.onImageScale}
+      />
     </>
   );
 }
@@ -755,38 +1069,6 @@ function Manual(props: {
           </label>
         ))}
       </div>
-    </>
-  );
-}
-
-function Review(props: { state: CaptureState; preview: ScanResult | null }) {
-  if (props.state.step === "done") {
-    return <p class="status">Measurements sent. The camera is off.</p>;
-  }
-  if (!props.preview) {
-    return <p class="status">Check the measurements before the shop receives them.</p>;
-  }
-  return (
-    <>
-      <p class="status">
-        These are body numbers you typed. Regular ease is added for the garment the shop cuts.
-        Height {props.preview.subject.heightCm} cm.
-      </p>
-      <ul>
-        {props.preview.measurements.map((measurement) => (
-          <li key={measurement.id}>
-            <span class="name">{measurement.label}</span>
-            <span class="detail">typed by you · {measurement.valueCm.toFixed(1)} cm</span>
-            <span class="value">source user</span>
-          </li>
-        ))}
-      </ul>
-      <p class="hint">
-        Garment chest {props.preview.garmentMeasurements.chhatiCm} cm, waist{" "}
-        {props.preview.garmentMeasurements.kamarCm} cm, sleeve{" "}
-        {props.preview.garmentMeasurements.baazuCm} cm, length{" "}
-        {props.preview.garmentMeasurements.lambaiCm} cm.
-      </p>
     </>
   );
 }

@@ -1,5 +1,8 @@
-import { TailorScan } from "@tailor-scan/widget";
+import { setDefaultVisionProvider, TailorScan } from "@tailor-scan/widget";
+import { createLocalPoseProvider } from "./pose-provider";
 import "./styles.css";
+
+setDefaultVisionProvider(createLocalPoseProvider);
 
 const inline = document.querySelector<HTMLElement>("#inline-result");
 const framed = document.querySelector<HTMLElement>("#iframe-result");

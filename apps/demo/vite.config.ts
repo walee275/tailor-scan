@@ -1,13 +1,30 @@
+import { cpSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import preact from "@preact/preset-vite";
+
+function localVisionWasm(): Plugin {
+  const copy = () => {
+    const target = fileURLToPath(new URL("public/vision/wasm", import.meta.url));
+    const source = fileURLToPath(
+      new URL("../../node_modules/@mediapipe/tasks-vision/wasm", import.meta.url),
+    );
+    mkdirSync(target, { recursive: true });
+    cpSync(source, target, { recursive: true });
+  };
+  return {
+    name: "local-vision-wasm",
+    buildStart: copy,
+    configureServer: copy,
+  };
+}
 
 const widgetEntry = fileURLToPath(
   new URL("../../packages/widget/src/index.ts", import.meta.url),
 );
 
 export default defineConfig({
-  plugins: [preact()],
+  plugins: [preact(), localVisionWasm()],
   resolve: {
     alias: {
       "@tailor-scan/widget": widgetEntry,

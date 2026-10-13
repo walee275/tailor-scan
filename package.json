@@ -14,7 +14,8 @@
     "build": "npm run build -w @tailor-scan/widget && npm run build -w @tailor-scan/demo",
     "test": "npm run test -w @tailor-scan/core && npm run test -w @tailor-scan/widget",
     "lint": "eslint .",
-    "typecheck": "npm run typecheck -w @tailor-scan/core && npm run typecheck -w @tailor-scan/widget && npm run typecheck -w @tailor-scan/demo"
+    "typecheck": "npm run typecheck -w @tailor-scan/core && npm run typecheck -w @tailor-scan/widget && npm run typecheck -w @tailor-scan/demo",
+    "validate": "node --experimental-strip-types packages/core/src/validation.ts validation/sessions"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

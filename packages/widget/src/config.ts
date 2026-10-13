@@ -7,6 +7,7 @@ import type {
   SizeChartEntry,
   SleevePath,
 } from "@tailor-scan/core";
+import type { VisionProviderFactory } from "./vision-host";
 
 export type CalibrationPreference = "height" | "reference" | "both";
 export type SleeveAggregate = "mean" | "max";
@@ -26,6 +27,7 @@ export type EmbedConfig = {
   theme?: { accent?: string };
   sizeChart?: SizeChartEntry[];
   easePresets?: EasePresets | null;
+  createVisionProvider?: VisionProviderFactory;
 };
 
 export type ProgressState = {
@@ -33,12 +35,15 @@ export type ProgressState = {
   step: string;
 };
 
-export type ScanErrorCode =
-  | "camera-denied"
-  | "camera-missing"
-  | "model-load-failed"
-  | "unsupported-browser"
-  | "session-superseded";
+export const scanErrorCodes = [
+  "camera-denied",
+  "camera-missing",
+  "model-load-failed",
+  "unsupported-browser",
+  "session-superseded",
+] as const;
+
+export type ScanErrorCode = (typeof scanErrorCodes)[number];
 
 export type ScanError = {
   code: ScanErrorCode;

@@ -59,6 +59,23 @@ export {
 export { overlappingSizes, type SizeChartEntry, type SizedMeasurement } from "./sizes";
 
 export {
+  armIsInPlane,
+  chestDepthPrior,
+  compareWaistToChest,
+  estimateGirth,
+  estimateLambai,
+  estimateSleeve,
+  napeToShoulderCm,
+  ramanujanCircumference,
+  waistDepthPrior,
+  worldLength,
+  type ArmBones,
+  type GirthEstimate,
+  type SleeveEstimate,
+  type Vec3,
+} from "./measure";
+
+export {
   scanResultSchema,
   validateScanResult,
   type ScanResultValidation,
@@ -66,6 +83,49 @@ export {
 } from "./schema";
 
 export { sampleScanResult } from "./sample";
+
+export {
+  averageVisionSamples,
+  checkFrontArms,
+  checkSideTurn,
+  checkVisibility,
+  poseGateThresholds,
+  shoulderWidthPx,
+} from "./pose";
+
+export { type PersonMask, type VisionSample, type WorldLandmark } from "./vision";
+
+export {
+  A4_INNER_MM,
+  CREDIT_CARD_MM,
+  agreeScales,
+  buildA4SheetPdf,
+  calibrateHeight,
+  detectRectangle,
+  heightScaleCmPerPx,
+  moveCorner,
+  quadSizePx,
+  referenceMillimeters,
+  referenceScaleCmPerPx,
+  selectCrown,
+  selectFloor,
+  type Corner,
+  type CornerQuad,
+  type HeightCalibration,
+  type Millimeters,
+  type RectangleDetection,
+  type ReferencePresetId,
+  type ScaleChoice,
+} from "./calibration";
+
+export {
+  previewScaleCmPerPx,
+  selectStations,
+  shoulderHipAxis,
+  torsoWidthPx,
+  type StationPick,
+  type StationSelection,
+} from "./stations";
 
 export {
   POSE_LANDMARK_COUNT,
