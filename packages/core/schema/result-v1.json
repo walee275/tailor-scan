@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tailor-scan.invalid/schema/result-v1.json",
+  "title": "Tailor Scan result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "sessionId",
+    "capturedAt",
+    "displayUnits",
+    "garment",
+    "subject",
+    "calibration",
+    "measurements",
+    "fit",
+    "garmentMeasurements",
+    "sizes",
+    "quality",
+    "privacy"
+  ],
+  "properties": {
+    "schema": { "const": "tailor-scan.result.v1" },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "displayUnits": { "enum": ["cm", "in"] },
+    "garment": { "enum": ["shirt", "kurta", "kameez", "custom"] },
+    "subject": { "$ref": "#/$defs/subject" },
+    "calibration": { "$ref": "#/$defs/calibration" },
+    "measurements": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/chhati" },
+        { "$ref": "#/$defs/kamar" },
+        { "$ref": "#/$defs/baazu" },
+        { "$ref": "#/$defs/lambai" }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "fit": { "$ref": "#/$defs/fit" },
+    "garmentMeasurements": { "$ref": "#/$defs/garmentMeasurements" },
+    "sizes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/overlappingSize" }
+    },
+    "quality": { "$ref": "#/$defs/quality" },
+    "privacy": { "$ref": "#/$defs/privacy" }
+  },
+  "$defs": {
+    "confidence": { "enum": ["high", "medium", "low"] },
+    "source": { "enum": ["camera", "user", "camera+override"] },
+    "rangeBasis": { "enum": ["error-budget", "measured-percentile"] },
+    "rangeCm": {
+      "type": ["array", "null"],
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "nullableCm": { "type": ["number", "null"] },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heightCm", "clothingFit", "adultDeclaration"],
+      "properties": {
+        "heightCm": { "type": "number", "exclusiveMinimum": 0 },
+        "clothingFit": { "enum": ["close", "loose", "unknown"] },
+        "adultDeclaration": { "const": true }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "frontScaleCmPerPx",
+        "sideScaleCmPerPx",
+        "agreement",
+        "confidence"
+      ],
+      "properties": {
+        "method": { "enum": ["height", "a4", "height+a4"] },
+        "frontScaleCmPerPx": { "type": "number", "exclusiveMinimum": 0 },
+        "sideScaleCmPerPx": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0
+        },
+        "agreement": {
+          "enum": ["within-3pct", "prefer-reference", "prefer-height", "height-only"]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" }
+      }
+    },
+    "fit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset",
+        "easeChestCm",
+        "easeWaistCm",
+        "sleeveLengthDeltaCm",
+        "garmentLengthDeltaCm",
+        "flare"
+      ],
+      "properties": {
+        "preset": { "enum": ["fitted", "regular", "relaxed", "custom"] },
+        "easeChestCm": { "type": "number" },
+        "easeWaistCm": { "type": "number" },
+        "sleeveLengthDeltaCm": { "type": "number" },
+        "garmentLengthDeltaCm": { "type": "number" },
+        "flare": { "enum": ["none", "straight", "aline"] }
+      }
+    },
+    "garmentMeasurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chhatiCm", "kamarCm", "baazuCm", "lambaiCm"],
+      "properties": {
+        "chhatiCm": { "type": "number" },
+        "kamarCm": { "type": "number" },
+        "baazuCm": { "type": "number" },
+        "lambaiCm": { "type": "number" }
+      }
+    },
+    "overlappingSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "measurementId"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "measurementId": { "enum": ["chhati", "kamar", "baazu", "lambai"] }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["front", "side", "warnings"],
+      "properties": {
+        "front": { "enum": ["pass", "fail", "skipped"] },
+        "side": { "enum": ["pass", "fail", "skipped"] },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imagesLeftDevice", "keypointsIncluded"],
+      "properties": {
+        "imagesLeftDevice": { "const": false },
+        "keypointsIncluded": { "type": "boolean" }
+      }
+    },
+    "chhati": {
+      "allOf": [
+        { "$ref": "#/$defs/girth" },
+        {
+          "type": "object",
+          "properties": { "id": { "const": "chhati" } }
+        }
+      ]
+    },
+    "kamar": {
+      "allOf": [
+        { "$ref": "#/$defs/girth" },
+        {
+          "type": "object",
+          "properties": { "id": { "const": "kamar" } }
+        }
+      ]
+    },
+    "girth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "source",
+        "method",
+        "valueCm",
+        "rangeCm",
+        "rangeBasis",
+        "confidence",
+        "stationFraction",
+        "overrideCm"
+      ],
+      "properties": {
+        "id": { "enum": ["chhati", "kamar"] },
+        "label": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/source" },
+        "method": { "enum": ["ellipse-two-view", "ellipse-front-only", "manual"] },
+        "valueCm": { "type": "number" },
+        "rangeCm": { "$ref": "#/$defs/rangeCm" },
+        "rangeBasis": { "$ref": "#/$defs/rangeBasis" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "stationFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "overrideCm": { "$ref": "#/$defs/nullableCm" }
+      },
+      "allOf": [{ "$ref": "#/$defs/overrideRequired" }]
+    },
+    "baazu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "source",
+        "method",
+        "sleevePath",
+        "valueCm",
+        "rangeCm",
+        "rangeBasis",
+        "confidence",
+        "leftCm",
+        "rightCm",
+        "overrideCm"
+      ],
+      "properties": {
+        "id": { "const": "baazu" },
+        "label": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/source" },
+        "method": { "enum": ["scaled-world-bones", "manual"] },
+        "sleevePath": { "enum": ["shoulder-to-wrist", "nape-to-wrist"] },
+        "valueCm": { "type": "number" },
+        "rangeCm": { "$ref": "#/$defs/rangeCm" },
+        "rangeBasis": { "$ref": "#/$defs/rangeBasis" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "leftCm": { "type": "number" },
+        "rightCm": { "type": "number" },
+        "overrideCm": { "$ref": "#/$defs/nullableCm" }
+      },
+      "allOf": [{ "$ref": "#/$defs/overrideRequired" }]
+    },
+    "lambai": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "source",
+        "method",
+        "lengthAnchor",
+        "hemAnchor",
+        "valueCm",
+        "rangeCm",
+        "rangeBasis",
+        "confidence",
+        "overrideCm"
+      ],
+      "properties": {
+        "id": { "const": "lambai" },
+        "label": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/source" },
+        "method": { "enum": ["nape-to-hem", "manual"] },
+        "lengthAnchor": { "const": "nape" },
+        "hemAnchor": { "enum": ["hip", "knee", "ankle", "custom"] },
+        "valueCm": { "type": "number" },
+        "rangeCm": { "$ref": "#/$defs/rangeCm" },
+        "rangeBasis": { "$ref": "#/$defs/rangeBasis" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "overrideCm": { "$ref": "#/$defs/nullableCm" }
+      },
+      "allOf": [{ "$ref": "#/$defs/overrideRequired" }]
+    },
+    "overrideRequired": {
+      "if": {
+        "type": "object",
+        "properties": { "source": { "const": "camera+override" } },
+        "required": ["source"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "overrideCm": { "type": "number" } }
+      }
+    }
+  }
+}
