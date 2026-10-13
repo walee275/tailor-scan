@@ -1,6 +1,6 @@
 # Tailor Scan — product and engineering plan
 
-Status: Milestone 10 adds review, overrides, and a drape preview. Privacy hardening and the tape study are not built yet.
+Status: Milestone 11 hardens privacy for integrators. The tape study is not checked in.
 
 This document locks the MVP baseline. Later milestones should change a decision only when a tape-measure check or an integration review gives a reason, and the change should be recorded here.
 

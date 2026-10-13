@@ -4,6 +4,7 @@ import {
   laplacianVariance,
   liveGates,
   meanLuma,
+  PoseIndex,
   previewScaleCmPerPx,
   selectStations,
   type DisplayUnits,
@@ -30,6 +31,7 @@ import { createCameraResult } from "./camera-result";
 import { ReviewEditor } from "./review-editor";
 import { createGuide, runRecordedGuide, stepGuide, type GuideSnapshot } from "./pose-guide";
 import { drawSkeleton } from "./skeleton";
+import { blurHead, bindSessionTeardown } from "./privacy";
 import { getDefaultVisionProvider, type VisionProvider } from "./vision-host";
 
 const prompts = [
@@ -435,7 +437,12 @@ export function Capture(props: {
   }, [state.step, state.camera, props.createVisionProvider, props.onError]);
 
   useEffect(() => {
+    const unbind = bindSessionTeardown(() => {
+      stopTracks(streamRef.current);
+      streamRef.current = null;
+    });
     return () => {
+      unbind();
       stopTracks(streamRef.current);
       streamRef.current = null;
       if (replayTimer.current != null) {
@@ -479,6 +486,21 @@ export function Capture(props: {
                 : imageCmPerPx * (front.imageWidth / front.mask.width),
             frontOnly: guide?.side == null,
           });
+    const video = videoRef.current;
+    const liveFrame = Boolean(video && video.readyState >= 2 && video.videoWidth > 0);
+    if (liveFrame && video) {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const nose = sample.landmarks[PoseIndex.nose];
+      if (nose) {
+        const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+        blurHead(frame.data, canvas.width, canvas.height, {
+          x: nose.x * canvas.width,
+          y: nose.y * canvas.height,
+          radius: canvas.width * 0.12,
+        });
+        context.putImageData(frame, 0, 0);
+      }
+    }
     drawSkeleton(
       context,
       sample.landmarks,
@@ -486,6 +508,7 @@ export function Capture(props: {
       canvas.height,
       stations?.chest?.fraction ?? null,
       stations?.waist?.fraction ?? null,
+      liveFrame,
     );
     if (heightCal?.crown) {
       const y = (heightCal.crown.y / sample.imageHeight) * canvas.height;
@@ -985,8 +1008,9 @@ function Camera(props: {
         </p>
       ) : null}
       <p class="hint">
-        The preview stays on this device. Replay uses a recorded pose. A live camera loads the local
-        pose model when this page provides one.
+        The preview stays on this device. The face is flattened on the preview and does not leave this
+        page. Replay uses a recorded pose. A live camera loads the local pose model when this page
+        provides one.
       </p>
       <CalibrationPanel
         heightScaleCmPerPx={height?.scaleCmPerPx ?? null}
