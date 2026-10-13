@@ -63,6 +63,7 @@ export class TailorScanElement extends HTMLElement {
         onComplete={this.#complete}
         onCancel={this.#cancel}
         onError={this.#error}
+        onDisplayUnits={this.#displayUnits}
       />,
       this.#root,
     );
@@ -82,6 +83,14 @@ export class TailorScanElement extends HTMLElement {
 
   #error = (error: ScanError): void => {
     this.#emit("error", error);
+  };
+
+  #displayUnits = (units: DisplayUnits): void => {
+    if (this.#config.displayUnits === units) {
+      return;
+    }
+    this.#config = { ...this.#config, displayUnits: units };
+    this.#paint();
   };
 
   #emit(type: string, detail?: unknown): void {

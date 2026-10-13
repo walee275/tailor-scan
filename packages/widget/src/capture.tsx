@@ -114,8 +114,7 @@ ul {
   padding: 0;
 }
 ul.prompts {
-  max-height: 11rem;
-  overflow: auto;
+  max-height: none;
 }
 li {
   display: grid;
@@ -236,6 +235,7 @@ export function Capture(props: {
   onComplete: (result: ScanResult) => void;
   onCancel: () => void;
   onError: (error: ScanError) => void;
+  onDisplayUnits?: (units: DisplayUnits) => void;
 }) {
   const [state, dispatch] = useReducer(
     captureReducer,
@@ -258,7 +258,7 @@ export function Capture(props: {
   }, [props.displayUnits]);
 
   useEffect(() => {
-    if (state.step === "consent" || state.step === "done") {
+    if (state.step === "consent" || state.step === "done" || state.step === "cancelled") {
       return;
     }
     props.onProgress(state.step);
@@ -389,14 +389,26 @@ export function Capture(props: {
         <p class="kicker">Tailor measurements</p>
         <h2 id="tailor-scan-title">Tailor Scan</h2>
         <p class="step">
-          {state.step === "done" ? "Sent" : `Step ${stepNumber} of ${stepOrder.length}`}
+          {state.step === "done"
+            ? "Sent"
+            : state.step === "cancelled"
+              ? "Cancelled"
+              : `Step ${stepNumber} of ${stepOrder.length}`}
         </p>
         <p class="meta">
           {state.garment} · display {props.displayUnits}
         </p>
         {state.step === "consent" ? <Consent state={state} dispatch={dispatch} /> : null}
+        {state.step === "cancelled" ? (
+          <p class="status">Cancelled. The shop receives nothing.</p>
+        ) : null}
         {state.step === "order" ? (
-          <Order state={state} dispatch={dispatch} hasChart={Boolean(props.sizeChart?.length)} />
+          <Order
+            state={state}
+            dispatch={dispatch}
+            hasChart={Boolean(props.sizeChart?.length)}
+            onDisplayUnits={props.onDisplayUnits}
+          />
         ) : null}
         {state.step === "body" ? <Body state={state} dispatch={dispatch} /> : null}
         {state.step === "camera" ? <Camera state={state} videoRef={videoRef} gates={gates} /> : null}
@@ -410,13 +422,20 @@ export function Capture(props: {
           </p>
         ) : null}
         <div class="actions">
-          {state.step !== "consent" && state.step !== "done" ? (
+          {state.step !== "consent" && state.step !== "done" && state.step !== "cancelled" ? (
             <button type="button" class="secondary" onClick={() => dispatch({ type: "back" })}>
               Back
             </button>
           ) : null}
           {state.step === "consent" ? (
-            <button type="button" class="secondary" onClick={props.onCancel}>
+            <button
+              type="button"
+              class="secondary"
+              onClick={() => {
+                dispatch({ type: "decline" });
+                props.onCancel();
+              }}
+            >
               No thanks
             </button>
           ) : null}
@@ -430,7 +449,7 @@ export function Capture(props: {
               {state.camera === "requesting" ? "Asking for the camera…" : "Turn on camera"}
             </button>
           ) : null}
-          {state.step !== "done" ? (
+          {state.step !== "done" && state.step !== "cancelled" ? (
             <button
               type="button"
               disabled={continueDisabled || state.camera === "requesting"}
@@ -485,6 +504,7 @@ function Order(props: {
   state: CaptureState;
   hasChart: boolean;
   dispatch: (action: Parameters<typeof captureReducer>[1]) => void;
+  onDisplayUnits?: (units: DisplayUnits) => void;
 }) {
   return (
     <>
@@ -514,12 +534,11 @@ function Order(props: {
             <select
               name="units"
               value={props.state.displayUnits}
-              onChange={(event) =>
-                props.dispatch({
-                  type: "set-units",
-                  units: event.currentTarget.value as DisplayUnits,
-                })
-              }
+              onChange={(event) => {
+                const units = event.currentTarget.value as DisplayUnits;
+                props.dispatch({ type: "set-units", units });
+                props.onDisplayUnits?.(units);
+              }}
             >
               <option value="cm">Centimeters</option>
               <option value="in">Inches</option>
@@ -811,6 +830,9 @@ function scriptFor(state: CaptureState): string {
   }
   if (state.step === "consent") {
     return "Consent. The camera stays on this device. Pictures are not uploaded.";
+  }
+  if (state.step === "cancelled") {
+    return "Cancelled. The shop receives nothing.";
   }
   if (state.step === "order") {
     return "Order setup. Choose a garment and units, and confirm you are an adult.";
