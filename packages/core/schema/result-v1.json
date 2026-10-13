@@ -82,7 +82,10 @@
       ],
       "properties": {
         "method": { "enum": ["height", "a4", "height+a4"] },
-        "frontScaleCmPerPx": { "type": "number", "exclusiveMinimum": 0 },
+        "frontScaleCmPerPx": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0
+        },
         "sideScaleCmPerPx": {
           "type": ["number", "null"],
           "exclusiveMinimum": 0

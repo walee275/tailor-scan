@@ -105,7 +105,7 @@ export type ScanResult = {
   };
   calibration: {
     method: CalibrationMethod;
-    frontScaleCmPerPx: number;
+    frontScaleCmPerPx: number | null;
     sideScaleCmPerPx: number | null;
     agreement: CalibrationAgreement;
     confidence: Confidence;

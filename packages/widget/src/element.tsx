@@ -1,16 +1,14 @@
 import { render } from "preact";
-import type { DisplayUnits } from "@tailor-scan/core";
-import type { EmbedConfig } from "./config";
+import type { DisplayUnits, ScanResult } from "@tailor-scan/core";
+import { Capture } from "./capture";
+import type { EmbedConfig, ScanError } from "./config";
 import { readAttributes } from "./config";
-import { createMockResult } from "./mock-result";
-import { Placeholder } from "./placeholder";
 
 export class TailorScanElement extends HTMLElement {
   readonly #root: ShadowRoot;
   #config: EmbedConfig = {};
   #explicitConfig = false;
   #sessionId = createSessionId();
-  #sent = false;
 
   constructor() {
     super();
@@ -52,25 +50,38 @@ export class TailorScanElement extends HTMLElement {
     const accent = this.#config.theme?.accent ?? "#1f3a34";
     this.style.setProperty("--tailor-accent", accent);
     render(
-      <Placeholder
-        displayUnits={this.#config.displayUnits ?? "cm"}
+      <Capture
+        sessionId={this.#sessionId}
         garment={this.#config.garment ?? "kurta"}
-        sent={this.#sent}
-        onSample={this.#sendSample}
+        displayUnits={this.#config.displayUnits ?? "cm"}
+        sleevePath={this.#config.sleevePath}
+        hemAnchor={this.#config.hemAnchor}
+        easePresets={this.#config.easePresets}
+        exportKeypoints={this.#config.exportKeypoints}
+        sizeChart={this.#config.sizeChart}
+        onProgress={this.#progress}
+        onComplete={this.#complete}
+        onCancel={this.#cancel}
+        onError={this.#error}
       />,
       this.#root,
     );
   }
 
-  #sendSample = (): void => {
-    if (this.#sent) {
-      return;
-    }
-    const result = createMockResult(this.#config, this.#sessionId);
-    this.#sent = true;
-    this.#paint();
-    this.#emit("progress", { sessionId: this.#sessionId, step: "sample" });
-    this.#emit("complete", result);
+  #progress = (step: string): void => {
+    this.#emit("progress", { sessionId: this.#sessionId, step });
+  };
+
+  #complete = (result: ScanResult): void => {
+    this.#emit("complete", { ...result, sessionId: this.#sessionId });
+  };
+
+  #cancel = (): void => {
+    this.#emit("cancel");
+  };
+
+  #error = (error: ScanError): void => {
+    this.#emit("error", error);
   };
 
   #emit(type: string, detail?: unknown): void {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { HOST_SOURCE } from "./protocol";
 import { startIframeEmbed } from "./iframe";
+import { HOST_SOURCE } from "./protocol";
+import { enterManualResult } from "./walk-capture";
 
 describe("iframe embed", () => {
   afterEach(() => {
@@ -59,12 +60,28 @@ describe("iframe embed", () => {
     expect(text).toContain("shirt");
     expect(text).toContain("display in");
 
-    document.querySelector("tailor-scan")?.shadowRoot?.querySelector("button")?.click();
-    expect(posted).toHaveLength(3);
-    expect(posted[2]?.data).toMatchObject({
+    const root = document.querySelector("tailor-scan")?.shadowRoot;
+    enterManualResult(root as ShadowRoot, {
+      chhati: "38",
+      kamar: "33",
+      baazu: "25",
+      lambai: "40",
+    });
+    const complete = posted.find((item) => item.data.type === "complete");
+    expect(complete?.origin).toBe("https://shop.example");
+    expect(complete?.data).toMatchObject({
       type: "complete",
       sessionId: "abc",
-      payload: { sessionId: "abc", schema: "tailor-scan.result.v1" },
+      payload: {
+        sessionId: "abc",
+        schema: "tailor-scan.result.v1",
+        measurements: [
+          { source: "user" },
+          { source: "user" },
+          { source: "user" },
+          { source: "user" },
+        ],
+      },
     });
   });
 });
