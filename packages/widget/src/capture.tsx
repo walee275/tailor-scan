@@ -25,7 +25,7 @@ import {
   type CaptureState,
   type ManualField,
 } from "./flow";
-import { GateChips } from "./chips";
+import { GateChips, PhaseBanner } from "./chips";
 import { CalibrationPanel } from "./calibration-panel";
 import { createManualResult } from "./manual-result";
 import { createCameraResult } from "./camera-result";
@@ -34,14 +34,28 @@ import { createGuide, runRecordedGuide, stepGuide, type GuideSnapshot } from "./
 import { drawSkeleton } from "./skeleton";
 import { blurHead, bindSessionTeardown } from "./privacy";
 import { getDefaultVisionProvider, type VisionProvider } from "./vision-host";
+import {
+  facingFromStream,
+  nextFacing,
+  openScanCamera,
+  shouldMirrorPreview,
+  type CameraFacing,
+} from "./camera-device";
 
-const prompts = [
+const frontPrompts = [
   "Prop the phone at about navel height, lens level, about 2 to 3 meters away.",
   "On a laptop, raise the lid on books so the lens is not looking up from the desk.",
   "Step back until your head and feet are both in frame.",
   "Hold still.",
   "Move your arms a little away from your sides.",
-  "Turn further until your chest points to the side.",
+];
+
+const sidePrompts = [
+  "The front pose is kept. Stay the same distance from the camera.",
+  "Turn 90° until the chest points to the side.",
+  "The far shoulder can be hidden. That is expected.",
+  "Keep the head and the near foot in frame.",
+  "Hold the side pose still.",
 ];
 
 const fieldCopy: Record<ManualField, { label: string; detail: string }> = {
@@ -86,6 +100,16 @@ h2 {
   font-size: 0.95rem;
   line-height: 1.45;
   color: #3d4742;
+}
+.phase {
+  margin: 0.85rem 0 0;
+  font-weight: 650;
+  color: var(--tailor-accent, #1f3a34);
+}
+.locked {
+  margin: 0.3rem 0 0;
+  font-weight: 650;
+  color: #1f3a34;
 }
 .meta, .hint {
   margin: 0.45rem 0 0;
@@ -186,6 +210,13 @@ button:disabled { cursor: default; opacity: 0.55; }
   inset: 0;
   height: 100%;
   pointer-events: none;
+}
+.stage.mirror {
+  transform: scaleX(-1);
+}
+button.switch {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.75rem;
 }
 .calibration { margin-top: 0.85rem; }
 .pad {
@@ -313,6 +344,9 @@ export function Capture(props: {
   const [imageScale, setImageScale] = useState<number | null>(null);
   const [cameraResult, setCameraResult] = useState<ScanResult | null>(null);
   const [draft, setDraft] = useState<ScanResult | null>(null);
+  const [facing, setFacing] = useState<CameraFacing | null>(null);
+  const [cameraEpoch, setCameraEpoch] = useState(0);
+  const [switching, setSwitching] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const replayTimer = useRef<number | null>(null);
   const stepRef = useRef(state.step);
@@ -339,6 +373,7 @@ export function Capture(props: {
     }
     stopTracks(streamRef.current);
     streamRef.current = null;
+    setFacing(null);
   }, [state.step]);
 
   useEffect(() => {
@@ -347,7 +382,7 @@ export function Capture(props: {
     if (video && stream) {
       video.srcObject = stream;
     }
-  }, [state.camera]);
+  }, [state.camera, cameraEpoch]);
 
   useEffect(() => {
     if (state.step !== "camera" || state.camera !== "live") {
@@ -433,7 +468,7 @@ export function Capture(props: {
       cancelAnimationFrame(frameId);
       provider?.close();
     };
-  }, [state.step, state.camera, props.createVisionProvider, props.onError]);
+  }, [state.step, state.camera, cameraEpoch, props.createVisionProvider, props.onError]);
 
   useEffect(() => {
     const unbind = bindSessionTeardown(() => {
@@ -598,13 +633,7 @@ export function Capture(props: {
       return;
     }
     try {
-      const stream = await devices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-      if (stepRef.current !== "camera") {
-        stopTracks(stream);
-        return;
-      }
-      streamRef.current = stream;
-      dispatch({ type: "camera-live" });
+      attachStream(await openScanCamera(devices.getUserMedia.bind(devices), "environment"));
     } catch (error) {
       const missing =
         error instanceof DOMException &&
@@ -617,6 +646,40 @@ export function Capture(props: {
       dispatch({ type: "camera-denied" });
       props.onError({ code: "camera-denied", message: "Camera access was blocked." });
     }
+  }
+
+  async function switchCamera(): Promise<void> {
+    if (state.camera !== "live" || switching) {
+      return;
+    }
+    const devices = navigator.mediaDevices;
+    if (!devices?.getUserMedia) {
+      return;
+    }
+    setSwitching(true);
+    try {
+      attachStream(await openScanCamera(devices.getUserMedia.bind(devices), nextFacing(facing)));
+    } catch {
+      dispatch({
+        type: "fail",
+        message: "Couldn't switch cameras. The current camera stays on.",
+      });
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  function attachStream(stream: MediaStream): void {
+    if (stepRef.current !== "camera") {
+      stopTracks(stream);
+      return;
+    }
+    stopTracks(streamRef.current);
+    streamRef.current = stream;
+    setFacing(facingFromStream(stream));
+    setGuide(null);
+    setCameraEpoch((epoch) => epoch + 1);
+    dispatch({ type: "camera-live" });
   }
 
   function send(): void {
@@ -677,6 +740,7 @@ export function Capture(props: {
             canvasRef={canvasRef}
             gates={gates}
             guide={guide}
+            mirror={shouldMirrorPreview(facing)}
             onImageScale={setImageScale}
           />
         ) : null}
@@ -727,6 +791,16 @@ export function Capture(props: {
               onClick={() => void enableCamera()}
             >
               {state.camera === "requesting" ? "Asking for the camera…" : "Turn on camera"}
+            </button>
+          ) : null}
+          {state.step === "camera" && state.camera === "live" ? (
+            <button
+              type="button"
+              class="secondary switch"
+              disabled={switching}
+              onClick={() => void switchCamera()}
+            >
+              {switching ? "Switching camera…" : "Switch camera"}
             </button>
           ) : null}
           {state.step === "camera" ? (
@@ -978,9 +1052,12 @@ function Camera(props: {
   canvasRef: { current: HTMLCanvasElement | null };
   gates: GateOutcome[];
   guide: GuideSnapshot | null;
+  mirror: boolean;
   onImageScale: (scaleCmPerPx: number | null) => void;
 }) {
   const front = props.guide?.front ?? null;
+  const phase = props.guide?.phase ?? "front";
+  const lines = phase === "front" ? frontPrompts : sidePrompts;
   const height =
     front?.mask == null || props.state.heightCm == null
       ? null
@@ -992,11 +1069,12 @@ function Camera(props: {
         });
   return (
     <>
+      <PhaseBanner phase={props.guide?.phase ?? null} frontCaptured={front != null} />
       <p class="status">
         {props.guide?.prompt ??
           "A second person holding the phone is the easier path. You can type the measurements if the camera is unavailable."}
       </p>
-      <div class="stage">
+      <div class={props.mirror ? "stage mirror" : "stage"}>
         {props.state.camera === "live" ? (
           <video ref={props.videoRef} autoPlay muted playsInline aria-label="Camera preview" />
         ) : null}
@@ -1008,7 +1086,7 @@ function Camera(props: {
         Position
       </p>
       <ul class="prompts">
-        {prompts.map((prompt) => (
+        {lines.map((prompt) => (
           <li class="prompt" key={prompt}>
             {prompt}
           </li>
@@ -1107,7 +1185,7 @@ function primaryLabel(state: CaptureState): string {
 
 function scriptFor(state: CaptureState): string {
   if (state.step === "camera") {
-    return `Camera. ${prompts.join(" ")}`;
+    return `Camera. Step 1 of 2: face the camera. ${frontPrompts.join(" ")} Step 2 of 2: turn 90°. ${sidePrompts.join(" ")}`;
   }
   if (state.step === "consent") {
     return "Consent. The camera stays on this device. Pictures are not uploaded.";

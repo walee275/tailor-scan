@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { POSE_LANDMARK_COUNT, PoseIndex } from "./gates";
-import { averageVisionSamples, checkFrontArms, checkSideTurn, checkVisibility, shoulderWidthPx } from "./pose";
+import {
+  averageVisionSamples,
+  checkFrontArms,
+  checkSideArms,
+  checkSideFrame,
+  checkSideTurn,
+  checkSideVisibility,
+  checkVisibility,
+  shoulderWidthPx,
+} from "./pose";
 import type { VisionSample } from "./vision";
 
 describe("pose gates", () => {
@@ -28,6 +37,33 @@ describe("pose gates", () => {
     expect(checkSideTurn(front, 640, frontWidth).status).toBe("fail");
     expect(checkSideTurn(side, 640, frontWidth).status).toBe("pass");
     expect(checkSideTurn(side, 640, null).status).toBe("pending");
+  });
+
+  it("accepts a profile when the far shoulder and foot are hidden", () => {
+    const front = pose();
+    const frontWidth = shoulderWidthPx(front, 640);
+    const profile = pose();
+    for (const index of [
+      PoseIndex.leftEar,
+      PoseIndex.leftShoulder,
+      PoseIndex.leftElbow,
+      PoseIndex.leftWrist,
+      PoseIndex.leftHip,
+      PoseIndex.leftKnee,
+      PoseIndex.leftAnkle,
+      PoseIndex.leftHeel,
+    ]) {
+      const point = profile[index];
+      if (point) {
+        point.visibility = 0.05;
+      }
+    }
+    expect(checkVisibility(profile).prompt).toContain("left");
+    expect(checkSideVisibility(profile).status).toBe("pass");
+    expect(checkSideTurn(profile, 640, frontWidth).status).toBe("pass");
+    expect(checkSideArms(profile).status).toBe("pass");
+    expect(checkSideFrame(profile).status).toBe("pass");
+    expect(checkSideFrame(profile).label).toBe("In frame");
   });
 
   it("averages a burst instead of keeping one frame", () => {

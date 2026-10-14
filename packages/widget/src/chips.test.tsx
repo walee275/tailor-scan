@@ -1,7 +1,7 @@
 import { liveGates, standingPose } from "@tailor-scan/core";
 import { render } from "preact";
 import { describe, expect, it } from "vitest";
-import { GateChips } from "./chips";
+import { GateChips, PhaseBanner } from "./chips";
 
 describe("gate chips", () => {
   it("prints a word for each status so color is not the only signal", () => {
@@ -21,5 +21,15 @@ describe("gate chips", () => {
     expect(text).toContain("The light is low");
     expect(text).toContain("Hold still.");
     expect(text).toContain("Pass");
+  });
+
+  it("names the current step and locks the front pose once it is kept", () => {
+    const host = document.createElement("div");
+    render(<PhaseBanner phase="front" frontCaptured={false} />, host);
+    expect(host.textContent).toContain("Step 1 of 2: face the camera");
+    expect(host.textContent).not.toContain("Front captured");
+    render(<PhaseBanner phase="turn" frontCaptured />, host);
+    expect(host.textContent).toContain("Step 2 of 2: turn 90°");
+    expect(host.textContent).toContain("Front captured ✓");
   });
 });
