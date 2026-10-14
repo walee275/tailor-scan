@@ -1,6 +1,12 @@
 import {
+  checkBlur,
+  checkExposure,
   checkFrontArms,
+  checkSideArms,
+  checkSideFrame,
+  checkSideStillness,
   checkSideTurn,
+  checkSideVisibility,
   checkVisibility,
   liveGates,
   shoulderWidthPx,
@@ -80,6 +86,9 @@ export function stepGuide(state: GuideSnapshot, sample: VisionSample, nowMs: num
   }
   const averaged = averageVisionSamples(burst);
   if (state.phase === "front") {
+    const frontShoulder = shoulderWidthPx(averaged.landmarks, averaged.imageWidth);
+    const sideGates = poseGates(sample, recent, "turn", frontShoulder);
+    const sideBlock = sideGates.find((gate) => gate.status !== "pass");
     return {
       ...state,
       phase: "turn",
@@ -87,8 +96,8 @@ export function stepGuide(state: GuideSnapshot, sample: VisionSample, nowMs: num
       steadySinceMs: null,
       burst: [],
       front: averaged,
-      prompt: "Turn to your left until you are side-on.",
-      gates,
+      prompt: sideBlock?.prompt ?? "Turn 90° to your left until you are side-on.",
+      gates: sideGates,
     };
   }
   return {
@@ -116,12 +125,33 @@ export function runRecordedGuide(): GuideSnapshot[] {
   return frames;
 }
 
+export function phaseInstruction(phase: PosePhase | null): string {
+  if (phase === "turn" || phase === "side") {
+    return "Step 2 of 2: turn 90°";
+  }
+  if (phase === "done") {
+    return "Both poses captured";
+  }
+  return "Step 1 of 2: face the camera";
+}
+
 function poseGates(
   sample: VisionSample,
   recent: ImageLandmark[][],
   phase: PosePhase,
   frontShoulderPx: number | null,
 ): GateOutcome[] {
+  if (phase === "turn" || phase === "side") {
+    return [
+      checkExposure(sample.luma),
+      checkBlur(sample.sharpness, sample.imageHeight),
+      checkSideFrame(sample.landmarks),
+      checkSideStillness(recent),
+      checkSideVisibility(sample.landmarks),
+      checkSideArms(sample.landmarks),
+      checkSideTurn(sample.landmarks, sample.imageWidth, frontShoulderPx),
+    ];
+  }
   const gates = liveGates({
     luma: sample.luma,
     laplacian: sample.sharpness,
@@ -130,11 +160,6 @@ function poseGates(
     recent,
   });
   gates.push(checkVisibility(sample.landmarks));
-  if (phase === "front" || phase === "side") {
-    gates.push(checkFrontArms(sample.landmarks));
-  }
-  if (phase === "turn" || phase === "side") {
-    gates.push(checkSideTurn(sample.landmarks, sample.imageWidth, frontShoulderPx));
-  }
+  gates.push(checkFrontArms(sample.landmarks));
   return gates;
 }

@@ -87,7 +87,11 @@ export { sampleScanResult } from "./sample";
 export {
   averageVisionSamples,
   checkFrontArms,
+  checkSideArms,
+  checkSideFrame,
+  checkSideStillness,
   checkSideTurn,
+  checkSideVisibility,
   checkVisibility,
   poseGateThresholds,
   shoulderWidthPx,

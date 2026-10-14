@@ -25,8 +25,14 @@ TailorScan.open({
 const iframe = document.querySelector<HTMLIFrameElement>("#scan-frame");
 const sessionId = "demo-iframe";
 const origin = window.location.origin;
+const phone = window.matchMedia("(max-width: 40rem)");
+let frameMounted = false;
 
-if (iframe) {
+function mountFrame(): void {
+  if (frameMounted || !iframe || phone.matches) {
+    return;
+  }
+  frameMounted = true;
   iframe.src = `/embed.html?session=${sessionId}&parentOrigin=${encodeURIComponent(origin)}`;
   TailorScan.bindIframeSession({
     iframe,
@@ -46,6 +52,9 @@ if (iframe) {
     },
   });
 }
+
+mountFrame();
+phone.addEventListener("change", mountFrame);
 
 function show(node: HTMLElement | null, value: unknown): void {
   if (!node) {
